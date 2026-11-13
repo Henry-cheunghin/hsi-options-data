@@ -1,0 +1,1832 @@
+<!DOCTYPE html>
+<html lang="zh-HK" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>恒生指數期權未平倉大數據監控 | HKEX 官方全自動版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans">
+    <div class="max-w-7xl mx-auto px-4 py-6">
+        <header class="flex flex-col md:flex-row md:items-center md:justify-between pb-6 border-b border-slate-800 gap-4">
+            <div>
+                <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-white">恒生指數期權 (HSI Options) 未平倉分布</h1>
+                <p class="text-xs sm:text-sm text-slate-400 mt-1">數據源：香港交易所 (HKEX) 官方系統 ｜ 最後更新：<span class="text-amber-400 font-mono">13/11/2026 16:29</span> ｜ API：<a href="./latest_hsi_options.json" class="underline text-sky-400">JSON</a> / <a href="./latest_hsi_options.csv" class="underline text-sky-400">CSV</a></p>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-right">
+                <div class="text-xs text-slate-400">恒生指數最新 / 收市</div>
+                <div class="text-xl font-mono font-bold text-white">23,637.60 <span class="text-xs font-normal text-slate-300">-370.95 (-1.55%)</span></div>
+            </div>
+        </header>
+
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 my-6">
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
+                <div class="text-xs text-slate-400 uppercase tracking-wider">期權最大痛點 (Max Pain)</div>
+                <div class="text-3xl font-mono font-extrabold text-purple-400 mt-2">24,000</div>
+                <div class="text-xs text-slate-400 mt-2">莊家結算賠付最小化核心區</div>
+            </div>
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
+                <div class="text-xs text-slate-400 uppercase tracking-wider mb-1">大戶 Call 重兵阻力牆 Top 3</div>
+                <div class="flex justify-between text-sm py-1 border-b border-slate-800/60"><span class="font-mono font-bold text-rose-400">25,800</span><span class="font-mono text-slate-200">1,315 張</span></div><div class="flex justify-between text-sm py-1 border-b border-slate-800/60"><span class="font-mono font-bold text-rose-400">24,400</span><span class="font-mono text-slate-200">1,202 張</span></div><div class="flex justify-between text-sm py-1 border-b border-slate-800/60"><span class="font-mono font-bold text-rose-400">26,000</span><span class="font-mono text-slate-200">1,157 張</span></div>
+            </div>
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
+                <div class="text-xs text-slate-400 uppercase tracking-wider mb-1">大戶 Put 重兵支持牆 Top 3</div>
+                <div class="flex justify-between text-sm py-1 border-b border-slate-800/60"><span class="font-mono font-bold text-emerald-400">23,600</span><span class="font-mono text-slate-200">1,242 張</span></div><div class="flex justify-between text-sm py-1 border-b border-slate-800/60"><span class="font-mono font-bold text-emerald-400">23,400</span><span class="font-mono text-slate-200">1,069 張</span></div><div class="flex justify-between text-sm py-1 border-b border-slate-800/60"><span class="font-mono font-bold text-emerald-400">22,000</span><span class="font-mono text-slate-200">1,049 張</span></div>
+            </div>
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
+                <div class="text-xs text-slate-400 uppercase tracking-wider">全月總未平倉 & Put/Call 比率</div>
+                <div class="text-3xl font-mono font-extrabold text-amber-400 mt-2">1.47</div>
+                <div class="text-xs text-slate-300 mt-2 font-mono">Call: 16,648 ｜ Put: 24,439</div>
+            </div>
+        </section>
+
+        <section class="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+            <div class="overflow-x-auto">
+                <table class="w-full border-collapse">
+                    <thead>
+                        <tr class="bg-slate-900 text-xs text-slate-300 border-b border-slate-700">
+                            <th colspan="4" class="py-2.5 px-3 text-center text-rose-400 font-bold tracking-wider border-r border-slate-800">認購期權 CALL（看升 / 上方阻力）</th>
+                            <th class="py-2.5 px-3 text-center bg-slate-950 text-white font-bold">行使價</th>
+                            <th colspan="4" class="py-2.5 px-3 text-center text-emerald-400 font-bold tracking-wider border-l border-slate-800">認沽期權 PUT（看跌 / 下方支持）</th>
+                        </tr>
+                        <tr class="bg-slate-900/60 text-[11px] text-slate-400 border-b border-slate-800">
+                            <th class="py-2 px-2 text-right">未平倉 (OI)</th>
+                            <th class="py-2 px-2 text-right hidden sm:table-cell">成交量</th>
+                            <th class="py-2 px-2 text-right hidden md:table-cell">引伸波幅</th>
+                            <th class="py-2 px-2 text-right">最後價</th>
+                            <th class="py-2 px-3 text-center bg-slate-950 font-mono">STRIKE</th>
+                            <th class="py-2 px-2 text-left">最後價</th>
+                            <th class="py-2 px-2 text-left hidden md:table-cell">引伸波幅</th>
+                            <th class="py-2 px-2 text-left hidden sm:table-cell">成交量</th>
+                            <th class="py-2 px-2 text-left">未平倉 (OI)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">82.9%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                17,000
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">56.3%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:72.9%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">958</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">81.7%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                17,100
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">55.4%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:31.3%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">411</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">80.6%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                17,200
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">2</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">54.5%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">5</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:6.2%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">82</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">79.4%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                17,300
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">2</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">53.6%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">2</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:12.9%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">170</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">78.2%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                17,400
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">2</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">52.7%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">7</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:1.2%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">16</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">77.1%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                17,500
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">2</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">51.8%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">9</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:12.1%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">159</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">75.9%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                17,600
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">50.9%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:1.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">13</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">74.8%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                17,700
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">50.0%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:2.7%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">35</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">73.6%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                17,800
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">49.2%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:13.8%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">181</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">72.5%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                17,900
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">2</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">48.3%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">2</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:7.8%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">102</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">71.4%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                18,000
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">2</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">47.4%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">12</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:12.9%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">170</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">70.2%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                18,100
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">2</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">46.5%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">5</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:8.7%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">114</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">69.0%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                18,200
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">45.7%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:8.6%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">113</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">67.8%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                18,300
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">3</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">44.8%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">2</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:14.1%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">186</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">66.7%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                18,400
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">2</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">44.0%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">2</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:12.1%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">159</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">65.5%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                18,500
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">3</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">43.1%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">1</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:7.9%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">104</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">64.6%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                18,600
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">4</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">42.3%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">1</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:14.8%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">194</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">63.5%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                18,700
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">4</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">41.4%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">27</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:14.5%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">191</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">62.4%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                18,800
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">4</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">40.5%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">24</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:22.4%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">295</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">61.2%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                18,900
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">4</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">39.6%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">32</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:13.5%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">177</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">60.1%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                19,000
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">4</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">38.7%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">12</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:22.7%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">299</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">59.0%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                19,100
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">4</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">37.9%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">34</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:17.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">223</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">57.8%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                19,200
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">5</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">37.0%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">98</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:23.8%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">313</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">56.7%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                19,300
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">6</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">36.1%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">165</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:14.6%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">192</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">55.6%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                19,400
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">6</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">35.2%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">79</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:18.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">237</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">54.5%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                19,500
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">7</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">36.7%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">45</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:29.4%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">386</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">53.4%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                19,600
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">7</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">35.8%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">26</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:17.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">223</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">52.3%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                19,700
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">6</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">35.0%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">26</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:11.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">144</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">51.5%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                19,800
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">7</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">34.1%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">5</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:25.4%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">334</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">50.5%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                19,900
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">6</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">33.3%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">6</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:21.7%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">286</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">49.4%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                20,000
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">8</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">33.7%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">34</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:40.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">526</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">47.2%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                20,200
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">8</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">32.9%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">105</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:30.8%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">405</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">45.4%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                20,400
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">10</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">32.2%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">34</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:45.6%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">599</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">43.3%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                20,600
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">12</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">30.9%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">42</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:32.3%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">425</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.1%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">1</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">41.5%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                20,800
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">12</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">30.0%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">77</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:54.7%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">719</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">40.8%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                21,000
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">15</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">29.2%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">23</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:51.3%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">675</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">40.0%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                21,200
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">17</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">28.3%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">60</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:30.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">394</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.1%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">1</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">38.0%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                21,400
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">20</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">27.0%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">62</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:34.1%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">449</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.2%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">2</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">36.1%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                21,600
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">24</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">26.4%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">342</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:73.5%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">966</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">0</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">20.8%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                21,800
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">29</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">25.4%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">164</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:45.9%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">604</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.1%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">1</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">21.7%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                22,000
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">36</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">24.4%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">174</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:79.8%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">1,049</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:10.4%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">137</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">18.6%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                22,200
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">48</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">23.4%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">120</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:52.1%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">685</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.5%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">7</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">1</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">16.8%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">1,435</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                22,400
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">60</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">22.7%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">205</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:62.1%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">817</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:22.2%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">292</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">2</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">16.1%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">1,245</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                22,600
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">83</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">21.9%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">348</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:65.9%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">866</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:4.6%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">61</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">16.7%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                22,800
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">108</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">21.3%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">597</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:66.5%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">874</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:15.1%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">199</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">7</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">16.8%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">735</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                23,000
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">147</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">20.5%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">618</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:49.9%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">656</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:52.2%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">687</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">8</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">17.0%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">598</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                23,200
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">198</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">20.0%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">379</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:56.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">736</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:34.8%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">457</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">43</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">16.6%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">440</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                23,400
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">263</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">19.8%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">856</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:81.3%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">1,069</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm bg-amber-500/20 border-y border-amber-400/50">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:20.4%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">268</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">133</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">16.5%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">326</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                23,600<span class="ml-1 px-1.5 py-0.5 text-[10px] bg-amber-500 text-slate-950 font-bold rounded">現價區</span>
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">348</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">19.7%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">509</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:94.4%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">1,242</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:47.3%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">622</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">490</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">16.4%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">235</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                23,800
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">455</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">19.4%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">360</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:51.5%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">677</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm bg-purple-500/15">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:87.4%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">1,149</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">638</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">16.5%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">163</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                24,000<span class="ml-1 px-1.5 py-0.5 text-[10px] bg-purple-500 text-white font-bold rounded">MaxPain</span>
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">592</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">19.8%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">203</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:71.7%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">943</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:37.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">486</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">603</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">16.5%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">107</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                24,200
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">733</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">20.1%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">67</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:34.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">447</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:91.4%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">1,202</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">901</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">16.6%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">71</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                24,400
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">867</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">20.7%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">34</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:27.5%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">361</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:63.3%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">832</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">487</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">16.9%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">45</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                24,600
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">1,037</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">22.1%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">125</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:43.3%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">569</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:56.7%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">746</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">232</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">17.4%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">30</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                24,800
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">1,010</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">23.3%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">2</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:18.7%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">246</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:69.7%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">916</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">608</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">17.6%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">19</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                25,000
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">25.1%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:20.2%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">266</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:55.7%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">732</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">444</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">18.1%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">12</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                25,200
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">26.9%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:16.2%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">213</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:55.6%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">731</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">73</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">18.7%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">9</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                25,400
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">28.2%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:33.4%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">439</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:50.9%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">669</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">73</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">19.1%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">7</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                25,600
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">30.3%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:2.3%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">30</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:100.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">1,315</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">90</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">19.6%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">5</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                25,800
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">32.4%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:1.1%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">14</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:88.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">1,157</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">109</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">20.3%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">3</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                26,000
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">34.6%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.2%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">3</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:22.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">289</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">16</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">20.7%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">3</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                26,200
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">36.6%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">0</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:21.1%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">278</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">14</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">20.5%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">2</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                26,400
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">38.5%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.2%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">2</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:22.2%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">292</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">23</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">21.7%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">2</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                26,600
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">40.4%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">0</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:28.6%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">376</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">23</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">23.0%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">2</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                26,800
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">42.3%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">0</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:40.4%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">531</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">24.2%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                27,000
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">43.6%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.1%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">1</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:32.2%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">423</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">25.4%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                27,200
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">45.5%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.2%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">2</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:9.2%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">121</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">10</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">26.6%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">2</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                27,400
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">47.3%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">0</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:11.3%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">149</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">3</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">27.8%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">1</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                27,600
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">48.9%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">0</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:8.7%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">114</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">7</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">29.0%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">1</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                27,800
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">50.8%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">0</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:14.4%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">190</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">30.2%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                28,000
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">52.6%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">0</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:4.2%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">55</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">31.4%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                28,200
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">54.3%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">0</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:4.1%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">54</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">32.6%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                28,400
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">56.1%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">0</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:4.3%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">57</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">33.7%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                28,600
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">57.9%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">0</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:7.5%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">99</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">34.9%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                28,800
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">59.6%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">0</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:21.7%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">286</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">2</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">35.9%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">1</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                29,000
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">61.4%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">0</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:10.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">131</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">37.0%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                29,200
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">63.1%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">0</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:19.4%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">255</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">38.0%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                29,400
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">64.8%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">0</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:4.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">52</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">39.0%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                29,600
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">66.5%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">0</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:1.0%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">13</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">40.0%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                29,800
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">68.2%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">0</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:2.8%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">37</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">41.0%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                30,000
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">69.7%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.1%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">1</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.9%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">12</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">42.0%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                30,200
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">71.2%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">0</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:5.8%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">76</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">43.0%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                30,400
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">72.6%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">0</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:1.1%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">14</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">44.0%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                30,600
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">74.1%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.1%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">1</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.6%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">8</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">45.0%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                30,800
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">75.6%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">0</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:2.4%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">31</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">46.0%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                31,000
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">77.0%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">0</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:1.8%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">24</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">47.0%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                31,200
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">78.4%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.1%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">1</span>
+            </td>
+        </tr>
+        
+        <tr class="border-b border-slate-800 text-xs sm:text-sm hover:bg-slate-800/60">
+            <td class="py-2 px-2 text-right font-mono relative">
+                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/25 rounded-l" style="width:0.8%"></div>
+                <span class="relative z-10 font-semibold text-rose-300">11</span>
+            </td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-400 hidden md:table-cell">47.9%</td>
+            <td class="py-2 px-2 text-right font-mono text-slate-200">-</td>
+            <td class="py-2 px-3 text-center font-mono font-bold text-white bg-slate-900/90 border-x border-slate-700">
+                31,400
+            </td>
+            <td class="py-2 px-2 text-left font-mono text-slate-200">-</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden md:table-cell">79.9%</td>
+            <td class="py-2 px-2 text-left font-mono text-slate-400 hidden sm:table-cell">0</td>
+            <td class="py-2 px-2 text-left font-mono relative">
+                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/25 rounded-r" style="width:0.0%"></div>
+                <span class="relative z-10 font-semibold text-emerald-300">0</span>
+            </td>
+        </tr>
+        
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</body>
+</html>
