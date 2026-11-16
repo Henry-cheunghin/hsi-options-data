@@ -2,17 +2,17 @@ name: Auto Update HSI Options Data (HKEX)
 
 on:
   schedule:
-    # 1. 香港時間 16:50 (UTC 08:50) 日間收市後更新
+    # 香港時間 16:50 (UTC 08:50) 日間收市後更新
     - cron: '50 8 * * 1-5'
-    # 2. 香港時間 23:12 (UTC 15:12) 港交所日報首輪抓取
+    # 香港時間 23:12 (UTC 15:12) 港交所日報首輪抓取
     - cron: '12 15 * * 1-5'
-    # 3. 香港時間 23:22 (UTC 15:22) 備援補抓（避開 23:15 塞車）
+    # 香港時間 23:22 (UTC 15:22) 備援補抓（避開 23:15 塞車）
     - cron: '22 15 * * 1-5'
-    # 4. 香港時間 23:38 (UTC 15:38) 最終保險補抓
+    # 香港時間 23:38 (UTC 15:38) 最終保險補抓
     - cron: '38 15 * * 1-5'
-    # 5. 香港時間 08:05 (UTC 00:05) 開盤前檢查
+    # 香港時間 08:05 (UTC 00:05) 開盤前檢查
     - cron: '5 0 * * 2-6'
-  workflow_dispatch: # 支援隨時在 GitHub 網頁手動一鍵執行
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -36,19 +36,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
-      - name: Run HKEX data fetcher
-        run: |
-          # 如你的主程式檔名不是 analyzer.py，請改為你實際的 .py 檔名
-          if [ -f analyzer.py ]; then
-            python analyzer.py
-          elif [ -f main.py ]; then
-            python main.py
-          elif [ -f fetch_hkex.py ]; then
-            python fetch_hkex.py
-          else
-            echo "找不到主爬蟲檔案，請檢查檔名" && exit 1
+          if grep -qi "playwright" requirements.txt 2>/dev/null; then
+            playwright install chromium
           fi
+
+      - name: Run build_hsi_dashboard.py
+        run: python build_hsi_dashboard.py
 
       - name: Commit and push updated data
         run: |
