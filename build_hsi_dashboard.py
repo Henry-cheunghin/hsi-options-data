@@ -1,5 +1,6 @@
 """
 HSI Options & Futures 3-Page Dashboard Builder (100% Python Stdlib - Zero External Deps)
+- Fixes Big5/CP950 HKEX encoding + adds English hsioe{yymmdd}.htm fallback
 - Page 1: 期權鏈分佈表 (HSI Cash Close, Max Pain, PCR, Futures Gross/Net OI + Full Options Chain)
 - Page 2: 四大方向與六大輔助分析總表 (All 9 Core & Auxiliary Analytical Dimensions)
 - Page 3: 實戰操盤策略與風控紀律 (Directional Alert, +300/-100 Plan, Weekly 2-Trade Rules)
@@ -8,6 +9,7 @@ HSI Options & Futures 3-Page Dashboard Builder (100% Python Stdlib - Zero Extern
 import html as html_lib
 import io
 import json
+import os
 import re
 import urllib.request
 import zipfile
@@ -36,6 +38,18 @@ def fetch_bytes(url: str, timeout: int = 25) -> bytes | None:
     return None
 
 
+def decode_hkex_bytes(raw: bytes) -> str:
+    """Try UTF-8 first, then Big5-HKSCS / CP950 (HKEX Chinese reports often use Big5)."""
+    for enc in ("utf-8", "big5hkscs", "cp950", "big5"):
+        try:
+            text = raw.decode(enc)
+            if "行使價" in text or "未平倉" in text or "STRIKE" in text.upper() or "HANG SENG" in text.upper():
+                return text
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="ignore")
+
+
 def strip_html(raw_html: str) -> str:
     text = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", raw_html, flags=re.S | re.I)
     text = re.sub(r"<br\s*/?>|</tr>|</p>|</div>|</li>", "\n", text, flags=re.I)
@@ -54,7 +68,6 @@ def parse_int(s: str) -> int:
 
 
 def fetch_hsi_cash_data() -> dict:
-    """Fetch latest official HSI Cash close, change, and 20-day high/low via Yahoo Finance ^HSI."""
     url = "https://query1.finance.yahoo.com/v8/finance/chart/%5EHSI?interval=1d&range=1mo"
     raw = fetch_bytes(url)
     if not raw:
@@ -85,17 +98,21 @@ def fetch_hsi_cash_data() -> dict:
 
 def find_latest_options():
     now = datetime.now(HKT)
-    for offset in range(5):
+    for offset in range(6):
         dt = now - timedelta(days=offset)
         if dt.weekday() >= 5:
             continue
         yymmdd = dt.strftime("%y%m%d")
-        url = f"https://www.hkex.com.hk/chi/stat/dmstat/dayrpt/hsioc{yymmdd}.htm"
-        raw = fetch_bytes(url)
-        if raw:
-            page = raw.decode("utf-8", errors="ignore")
-            if "行使價" in page or "未平倉" in page:
-                return dt.strftime("%Y-%m-%d"), page
+        for url in [
+            f"https://www.hkex.com.hk/chi/stat/dmstat/dayrpt/hsioc{yymmdd}.htm",
+            f"https://www.hkex.com.hk/eng/stat/dmstat/dayrpt/hsioe{yymmdd}.htm",
+        ]:
+            raw = fetch_bytes(url)
+            if raw:
+                page = decode_hkex_bytes(raw)
+                if "行使價" in page or "未平倉" in page or "STRIKE" in page.upper() or "OPEN INTEREST" in page.upper():
+                    print(f"[OK] Loaded HKEX options report: {url}")
+                    return dt.strftime("%Y-%m-%d"), page
     return None, None
 
 
@@ -167,7 +184,7 @@ def parse_options_oi(page: str) -> dict:
 
 def fetch_latest_dtop_futures() -> dict:
     now = datetime.now(HKT)
-    for offset in range(5):
+    for offset in range(6):
         dt = now - timedelta(days=offset)
         if dt.weekday() >= 5:
             continue
@@ -178,6 +195,7 @@ def fetch_latest_dtop_futures() -> dict:
         ]:
             raw = fetch_bytes(url)
             if raw and raw[:2] == b"PK":
+                print(f"[OK] Loaded HKEX DTOP zip: {url}")
                 return parse_dtop_zip(dt.strftime("%Y-%m-%d"), raw)
     return {"date": "待補", "front_gross": "待補", "front_net": "待補", "front_net_chg": "待補", "sum2_net_chg": "待補", "raw_net_chg_int": 0}
 
@@ -244,7 +262,6 @@ def build_html(opt_date: str, cash: dict, opt: dict, dtop: dict, fut: dict) -> s
     puts_str = " / ".join(f"{k:,} ({v:,}張)" for k, v in opt["top_puts"]) or "待補"
     cash_color = "text-rose-400" if cash.get("is_down") else "text-emerald-400"
 
-    # Golden Ratio from 1-month High/Low
     hi, lo = cash.get("hi_20", 0), cash.get("lo_20", 0)
     if hi > lo > 0:
         span = hi - lo
@@ -256,7 +273,6 @@ def build_html(opt_date: str, cash: dict, opt: dict, dtop: dict, fut: dict) -> s
     else:
         fib_text = "待補"
 
-    # Strategy summary values
     top_call_wall = f"{opt['top_calls'][0][0]:,} ({opt['top_calls'][0][1]:,}張)" if opt["top_calls"] else "待補"
     top_put_wall = f"{opt['top_puts'][0][0]:,} ({opt['top_puts'][0][1]:,}張)" if opt["top_puts"] else "待補"
 
@@ -296,7 +312,6 @@ def build_html(opt_date: str, cash: dict, opt: dict, dtop: dict, fut: dict) -> s
 <body class="p-4 sm:p-6 max-w-6xl mx-auto space-y-5">
   {alert_html}
 
-  <!-- Header KPI Strip -->
   <header class="card p-4 sm:p-5 flex flex-wrap justify-between items-center gap-4">
     <div>
       <span class="text-xs px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-bold">100% 官方真實數據 · 期權結算日 {opt_date} · 更新於 {now_hkt} HKT</span>
@@ -318,14 +333,12 @@ def build_html(opt_date: str, cash: dict, opt: dict, dtop: dict, fut: dict) -> s
     </div>
   </header>
 
-  <!-- 3-Page Navigation Bar -->
   <nav class="flex flex-wrap gap-2">
     <button onclick="showPage('p1')" id="btn-p1" class="px-4 py-2 rounded-lg text-xs sm:text-sm font-bold bg-sky-600 text-white">📊 第一頁：期權鏈分佈表</button>
     <button onclick="showPage('p2')" id="btn-p2" class="px-4 py-2 rounded-lg text-xs sm:text-sm font-bold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700">🧭 第二頁：四大方向與六大分析</button>
     <button onclick="showPage('p3')" id="btn-p3" class="px-4 py-2 rounded-lg text-xs sm:text-sm font-bold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700">⚡ 第三頁：實戰操盤策略</button>
   </nav>
 
-  <!-- PAGE 1: Full Options Chain -->
   <main id="page-p1" class="space-y-4">
     <section class="card overflow-hidden">
       <div class="p-4 border-b border-slate-700 flex flex-wrap justify-between items-center gap-2">
@@ -352,7 +365,6 @@ def build_html(opt_date: str, cash: dict, opt: dict, dtop: dict, fut: dict) -> s
     </section>
   </main>
 
-  <!-- PAGE 2: 4 Core Pillars + 6 Auxiliary Analysis -->
   <main id="page-p2" class="hidden space-y-4">
     <section class="card overflow-hidden">
       <div class="p-4 border-b border-slate-700">
@@ -379,7 +391,6 @@ def build_html(opt_date: str, cash: dict, opt: dict, dtop: dict, fut: dict) -> s
     </section>
   </main>
 
-  <!-- PAGE 3: Actionable Trading Strategy -->
   <main id="page-p3" class="hidden space-y-4">
     <section class="card p-5 space-y-4">
       <div class="flex flex-wrap justify-between items-center gap-2 border-b border-slate-700 pb-3">
@@ -424,16 +435,20 @@ def build_html(opt_date: str, cash: dict, opt: dict, dtop: dict, fut: dict) -> s
 def main():
     opt_date, opt_html = find_latest_options()
     if not opt_html:
-        print("[ERROR] No HKEX options report found.")
-        return
+        raise RuntimeError("No HKEX options report found (hsioc/hsioe).")
     cash = fetch_hsi_cash_data()
     opt = parse_options_oi(opt_html)
     dtop = fetch_latest_dtop_futures()
     fut = fetch_futures_daily_report()
     out_html = build_html(opt_date, cash, opt, dtop, fut)
-    with open("index.html", "w", encoding="utf-8") as f:
-        f.write(out_html)
-    print(f"[OK] Built 3-page index.html for {opt_date} | Cash={cash['price']} | MaxPain={opt['max_pain']} | DTOP={dtop}")
+    targets = ["index.html"]
+    for folder in ("public", "dist", "docs"):
+        if os.path.isdir(folder):
+            targets.append(os.path.join(folder, "index.html"))
+    for path in targets:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(out_html)
+        print(f"[OK] Wrote {path}")
 
 
 if __name__ == "__main__":
