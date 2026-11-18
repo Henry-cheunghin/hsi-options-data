@@ -1,22 +1,21 @@
 """
-HSI Options & Futures All-In-One Dashboard Builder (GitHub Actions -> Cloudflare Pages)
+HSI Options & Futures All-In-One Dashboard Builder (100% Python Stdlib - Zero External Deps)
 - Fetches 100% Real HKEX Official Data:
   1. Options OI & Max Pain & PCR: hsioc{yymmdd}.htm
-  2. Futures DTOP (Gross OI, Net OI, Net OI Change): DTOP_F_{yyyymmdd}.zip via oi_f.asp
+  2. Futures DTOP (Gross OI, Net OI, Net OI Change): DTOP_F_{yyyymmdd}.zip
   3. Futures Daily Market Report: dmreport1.htm
 - Outputs: index.html (with Mandatory Rule 0 Directional Alert + 10-Item Master Table)
 - Zero Fabrication: Any unavailable non-HKEX intraday field is labeled "待補".
 """
 
+import html as html_lib
 import io
 import os
 import re
+import urllib.request
 import zipfile
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-
-import requests
-from bs4 import BeautifulSoup
 
 HKT = ZoneInfo("Asia/Hong_Kong")
 HEADERS = {
@@ -29,12 +28,22 @@ HEADERS = {
 
 def fetch_bytes(url: str, timeout: int = 25) -> bytes | None:
     try:
-        r = requests.get(url, headers=HEADERS, timeout=timeout)
-        if r.status_code == 200 and len(r.content) > 500:
-            return r.content
+        req = urllib.request.Request(url, headers=HEADERS)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if resp.status == 200:
+                data = resp.read()
+                if len(data) > 500:
+                    return data
     except Exception as exc:
         print(f"[WARN] Fetch failed {url}: {exc}")
     return None
+
+
+def strip_html(raw_html: str) -> str:
+    text = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", raw_html, flags=re.S | re.I)
+    text = re.sub(r"<br\s*/?>|</tr>|</p>|</div>|</li>", "\n", text, flags=re.I)
+    text = re.sub(r"<[^>]+>", " ", text)
+    return html_lib.unescape(text)
 
 
 def parse_int(s: str) -> int:
@@ -57,28 +66,25 @@ def find_latest_options():
         url = f"https://www.hkex.com.hk/chi/stat/dmstat/dayrpt/hsioc{yymmdd}.htm"
         raw = fetch_bytes(url)
         if raw:
-            html = raw.decode("utf-8", errors="ignore")
-            if "行使價" in html or "未平倉" in html:
-                return dt.strftime("%Y-%m-%d"), html
+            page = raw.decode("utf-8", errors="ignore")
+            if "行使價" in page or "未平倉" in page:
+                return dt.strftime("%Y-%m-%d"), page
     return None, None
 
 
-def parse_options_oi(html: str) -> dict:
-    soup = BeautifulSoup(html, "html.parser")
-    text = soup.get_text("\n")
+def parse_options_oi(page: str) -> dict:
+    text = strip_html(page)
     months = sorted({(int(y), int(m)) for y, m in re.findall(r"(\d{2})\s*年\s*(\d{1,2})\s*月", text)})
     front_label = f"20{months[0][0]:02d}年{months[0][1]:02d}月" if months else "即月"
 
     calls, puts = {}, {}
-    # Match strike rows containing Call/Put OI in HKEX hsioc report
     for line in text.splitlines():
         nums = re.findall(r"[-+]?\d[\d,]*", line)
-        if len(nums) >= 6:
+        if len(nums) >= 8:
             strike_cand = parse_int(nums[0])
             if 15000 <= strike_cand <= 35000 and strike_cand % 100 == 0:
-                # Standard hsioc layout puts Call OI & Put OI near the right columns
-                c_oi = parse_int(nums[-4]) if len(nums) >= 8 else 0
-                p_oi = parse_int(nums[-2]) if len(nums) >= 8 else 0
+                c_oi = parse_int(nums[-4])
+                p_oi = parse_int(nums[-2])
                 if c_oi >= 0:
                     calls[strike_cand] = calls.get(strike_cand, 0) + c_oi
                 if p_oi >= 0:
@@ -90,7 +96,6 @@ def parse_options_oi(html: str) -> dict:
     top_calls = sorted(calls.items(), key=lambda x: x[1], reverse=True)[:3]
     top_puts = sorted(puts.items(), key=lambda x: x[1], reverse=True)[:3]
 
-    # Max Pain calculation
     all_strikes = sorted(set(calls.keys()) | set(puts.keys()))
     max_pain = 0
     if all_strikes:
@@ -122,7 +127,6 @@ def fetch_latest_dtop_futures() -> dict:
         if dt.weekday() >= 5:
             continue
         ymd = dt.strftime("%Y%m%d")
-        # Try direct HKEX DTOP archive URL pattern
         for url in [
             f"https://www.hkex.com.hk/eng/stat/dmstat/oi/DTOP_F_{ymd}.zip",
             f"https://www.hkex.com.hk/eng/stat/dmstat/oi/dtop_f_{ymd}.zip",
@@ -150,7 +154,6 @@ def parse_dtop_zip(date_str: str, zip_bytes: bytes) -> dict:
     if not records:
         return {"date": date_str, "front_gross": "待補", "front_net": "待補", "front_net_chg": "待補", "sum2_net_chg": "待補"}
 
-    # Extract front-month and second-month Gross OI, Net OI, Net OI Change
     front_nums = records[0][1]
     front_gross = parse_int(front_nums[-3]) if len(front_nums) >= 3 else 0
     front_net = parse_int(front_nums[-2]) if len(front_nums) >= 2 else 0
@@ -171,7 +174,7 @@ def fetch_futures_daily_report() -> dict:
     raw = fetch_bytes("https://www.hkex.com.hk/eng/stat/dmstat/dayrpt/dmreport1.htm")
     if not raw:
         return {"close": "待補", "high": "待補", "low": "待補", "oi": "待補"}
-    text = BeautifulSoup(raw.decode("utf-8", errors="ignore"), "html.parser").get_text("\n")
+    text = strip_html(raw.decode("utf-8", errors="ignore"))
     for line in text.splitlines():
         if re.search(r"^[A-Z]{3}-\d{2}\b", line.strip()):
             nums = re.findall(r"[-+]?\d[\d,]*", line)
@@ -263,12 +266,12 @@ def main():
     opt = parse_options_oi(opt_html)
     dtop = fetch_latest_dtop_futures()
     fut = fetch_futures_daily_report()
-    html = build_html(opt_date, opt, dtop, fut)
-    os.makedirs("dist", exist_ok=True)
+    out_html = build_html(opt_date, opt, dtop, fut)
     with open("index.html", "w", encoding="utf-8") as f:
-        f.write(html)
+        f.write(out_html)
     print(f"[OK] Built index.html for {opt_date} | MaxPain={opt['max_pain']} | DTOP={dtop}")
 
 
 if __name__ == "__main__":
     main()
+  
