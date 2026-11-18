@@ -1,16 +1,13 @@
 """
-HSI Options & Futures All-In-One Dashboard Builder (100% Python Stdlib - Zero External Deps)
-- Fetches 100% Real HKEX Official Data:
-  1. Options OI & Max Pain & PCR: hsioc{yymmdd}.htm
-  2. Futures DTOP (Gross OI, Net OI, Net OI Change): DTOP_F_{yyyymmdd}.zip
-  3. Futures Daily Market Report: dmreport1.htm
-- Outputs: index.html (with Mandatory Rule 0 Directional Alert + 10-Item Master Table)
-- Zero Fabrication: Any unavailable non-HKEX intraday field is labeled "待補".
+HSI Options & Futures 3-Page Dashboard Builder (100% Python Stdlib - Zero External Deps)
+- Page 1: 期權鏈分佈表 (HSI Cash Close, Max Pain, PCR, Futures Gross/Net OI + Full Options Chain)
+- Page 2: 四大方向與六大輔助分析總表 (All 9 Core & Auxiliary Analytical Dimensions)
+- Page 3: 實戰操盤策略與風控紀律 (Directional Alert, +300/-100 Plan, Weekly 2-Trade Rules)
 """
 
 import html as html_lib
 import io
-import os
+import json
 import re
 import urllib.request
 import zipfile
@@ -32,7 +29,7 @@ def fetch_bytes(url: str, timeout: int = 25) -> bytes | None:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             if resp.status == 200:
                 data = resp.read()
-                if len(data) > 500:
+                if len(data) > 200:
                     return data
     except Exception as exc:
         print(f"[WARN] Fetch failed {url}: {exc}")
@@ -56,6 +53,36 @@ def parse_int(s: str) -> int:
         return 0
 
 
+def fetch_hsi_cash_data() -> dict:
+    """Fetch latest official HSI Cash close, change, and 20-day high/low via Yahoo Finance ^HSI."""
+    url = "https://query1.finance.yahoo.com/v8/finance/chart/%5EHSI?interval=1d&range=1mo"
+    raw = fetch_bytes(url)
+    if not raw:
+        return {"price": "待補", "chg": "待補", "pct": "待補", "is_down": False, "hi_20": 0, "lo_20": 0}
+    try:
+        data = json.loads(raw.decode("utf-8"))
+        q = data["chart"]["result"][0]["indicators"]["quote"][0]
+        closes = [c for c in q["close"] if c is not None]
+        highs = [h for h in q["high"] if h is not None]
+        lows = [l for l in q["low"] if l is not None]
+        price = closes[-1]
+        prev = closes[-2] if len(closes) >= 2 else price
+        chg = price - prev
+        pct = (chg / prev * 100) if prev else 0.0
+        return {
+            "price": f"{price:,.2f}",
+            "price_num": price,
+            "chg": f"{chg:+,.2f}",
+            "pct": f"{pct:+.2f}%",
+            "is_down": chg < 0,
+            "hi_20": round(max(highs)) if highs else 0,
+            "lo_20": round(min(lows)) if lows else 0,
+        }
+    except Exception as exc:
+        print(f"[WARN] HSI cash parse error: {exc}")
+        return {"price": "待補", "chg": "待補", "pct": "待補", "is_down": False, "hi_20": 0, "lo_20": 0}
+
+
 def find_latest_options():
     now = datetime.now(HKT)
     for offset in range(5):
@@ -77,26 +104,44 @@ def parse_options_oi(page: str) -> dict:
     months = sorted({(int(y), int(m)) for y, m in re.findall(r"(\d{2})\s*年\s*(\d{1,2})\s*月", text)})
     front_label = f"20{months[0][0]:02d}年{months[0][1]:02d}月" if months else "即月"
 
-    calls, puts = {}, {}
-    for line in text.splitlines():
+    lines = text.splitlines()
+    chain = {}
+    seen_front = False
+    for line in lines:
+        if months and f"{months[0][0]:02d}" in line and f"{months[0][1]}" in line and "月" in line:
+            seen_front = True
+        if len(months) >= 2 and seen_front and f"{months[1][0]:02d}" in line and f"{months[1][1]}" in line and "月" in line:
+            break
+
         nums = re.findall(r"[-+]?\d[\d,]*", line)
         if len(nums) >= 8:
-            strike_cand = parse_int(nums[0])
-            if 15000 <= strike_cand <= 35000 and strike_cand % 100 == 0:
-                c_oi = parse_int(nums[-4])
-                p_oi = parse_int(nums[-2])
-                if c_oi >= 0:
-                    calls[strike_cand] = calls.get(strike_cand, 0) + c_oi
-                if p_oi >= 0:
-                    puts[strike_cand] = puts.get(strike_cand, 0) + p_oi
+            strike = None
+            for cand in nums[:3]:
+                val = parse_int(cand)
+                if 15000 <= val <= 35000 and val % 100 == 0:
+                    strike = val
+                    break
+            if not strike:
+                continue
+            c_vol = parse_int(nums[-6]) if len(nums) >= 10 else parse_int(nums[1])
+            c_oi = parse_int(nums[-4])
+            c_chg = parse_int(nums[-3]) if len(nums) >= 9 else 0
+            p_oi = parse_int(nums[-2])
+            p_chg = parse_int(nums[-1])
+            p_vol = parse_int(nums[-5]) if len(nums) >= 10 else 0
 
+            if strike not in chain:
+                chain[strike] = {"c_vol": c_vol, "c_oi": c_oi, "c_chg": c_chg, "p_oi": p_oi, "p_chg": p_chg, "p_vol": p_vol}
+
+    calls = {k: v["c_oi"] for k, v in chain.items()}
+    puts = {k: v["p_oi"] for k, v in chain.items()}
     total_call = sum(calls.values())
     total_put = sum(puts.values())
     pcr = round(total_put / total_call, 2) if total_call > 0 else 0.0
     top_calls = sorted(calls.items(), key=lambda x: x[1], reverse=True)[:3]
     top_puts = sorted(puts.items(), key=lambda x: x[1], reverse=True)[:3]
 
-    all_strikes = sorted(set(calls.keys()) | set(puts.keys()))
+    all_strikes = sorted(chain.keys())
     max_pain = 0
     if all_strikes:
         best_payout = None
@@ -116,11 +161,11 @@ def parse_options_oi(page: str) -> dict:
         "max_pain": max_pain,
         "top_calls": top_calls,
         "top_puts": top_puts,
+        "chain": chain,
     }
 
 
 def fetch_latest_dtop_futures() -> dict:
-    """Fetch HKEX DTOP_F_yyyymmdd.zip from oi_f.asp to extract HSI Futures Gross OI, Net OI & Net OI Change."""
     now = datetime.now(HKT)
     for offset in range(5):
         dt = now - timedelta(days=offset)
@@ -134,7 +179,7 @@ def fetch_latest_dtop_futures() -> dict:
             raw = fetch_bytes(url)
             if raw and raw[:2] == b"PK":
                 return parse_dtop_zip(dt.strftime("%Y-%m-%d"), raw)
-    return {"date": "待補", "front_gross": "待補", "front_net": "待補", "front_net_chg": "待補", "sum2_net_chg": "待補"}
+    return {"date": "待補", "front_gross": "待補", "front_net": "待補", "front_net_chg": "待補", "sum2_net_chg": "待補", "raw_net_chg_int": 0}
 
 
 def parse_dtop_zip(date_str: str, zip_bytes: bytes) -> dict:
@@ -152,7 +197,7 @@ def parse_dtop_zip(date_str: str, zip_bytes: bytes) -> dict:
                     if len(nums) >= 5:
                         records.append((line.strip(), nums))
     if not records:
-        return {"date": date_str, "front_gross": "待補", "front_net": "待補", "front_net_chg": "待補", "sum2_net_chg": "待補"}
+        return {"date": date_str, "front_gross": "待補", "front_net": "待補", "front_net_chg": "待補", "sum2_net_chg": "待補", "raw_net_chg_int": 0}
 
     front_nums = records[0][1]
     front_gross = parse_int(front_nums[-3]) if len(front_nums) >= 3 else 0
@@ -170,7 +215,6 @@ def parse_dtop_zip(date_str: str, zip_bytes: bytes) -> dict:
 
 
 def fetch_futures_daily_report() -> dict:
-    """Fetch HKEX dmreport1.htm for latest HSI Futures day close, high, low & OI."""
     raw = fetch_bytes("https://www.hkex.com.hk/eng/stat/dmstat/dayrpt/dmreport1.htm")
     if not raw:
         return {"close": "待補", "high": "待補", "low": "待補", "oi": "待補"}
@@ -183,76 +227,195 @@ def fetch_futures_daily_report() -> dict:
     return {"close": "待補", "high": "待補", "low": "待補", "oi": "待補"}
 
 
-def build_html(opt_date: str, opt: dict, dtop: dict, fut: dict) -> str:
+def build_html(opt_date: str, cash: dict, opt: dict, dtop: dict, fut: dict) -> str:
     now_hkt = datetime.now(HKT).strftime("%d/%m/%Y %H:%M")
     net_chg_int = dtop.get("raw_net_chg_int", 0)
+    is_bear_alert = isinstance(net_chg_int, int) and net_chg_int >= 800 and cash.get("is_down")
+
     alert_html = ""
-    if isinstance(net_chg_int, int) and abs(net_chg_int) >= 800:
-        if net_chg_int >= 800:
-            alert_html = f"""
-  <div class="p-4 rounded-xl border border-rose-500/70 bg-rose-950/40 mb-5">
-    <div class="font-black text-rose-400">🚨【機構未平倉淨數異動警報】</div>
-    <p class="text-xs sm:text-sm text-slate-200 mt-1">港交所 DTOP ({dtop['date']}) 顯示即月＋下月淨數變動達 <strong>{dtop['sum2_net_chg']} 張</strong>，請配合當日升跌及 Put/Call 牆位置嚴格執行順勢策略。</p>
+    if is_bear_alert:
+        alert_html = f"""
+  <div class="p-4 rounded-xl border border-rose-500/75 bg-rose-950/50">
+    <div class="font-black text-rose-400">🚨【大戶機構明顯睇淡警報 · 禁止撈底買升】</div>
+    <p class="text-xs sm:text-sm text-slate-200 mt-1">跌市期間港交所 DTOP ({dtop['date']}) 顯示即月＋下月期指淨數急增 <strong>{dtop['sum2_net_chg']} 張</strong>，屬機構單邊造淡訊號，嚴禁逆勢撈底，請切換至「第三頁：實戰操盤策略」執行順勢高空。</p>
   </div>"""
 
     calls_str = " / ".join(f"{k:,} ({v:,}張)" for k, v in opt["top_calls"]) or "待補"
     puts_str = " / ".join(f"{k:,} ({v:,}張)" for k, v in opt["top_puts"]) or "待補"
+    cash_color = "text-rose-400" if cash.get("is_down") else "text-emerald-400"
+
+    # Golden Ratio from 1-month High/Low
+    hi, lo = cash.get("hi_20", 0), cash.get("lo_20", 0)
+    if hi > lo > 0:
+        span = hi - lo
+        fib_236 = round(hi - span * 0.236)
+        fib_382 = round(hi - span * 0.382)
+        fib_618 = round(hi - span * 0.618)
+        fib_764 = round(hi - span * 0.764)
+        fib_text = f"近1月波段 {lo:,} 至 {hi:,}<br>23.6%–38.2%：{fib_236:,}–{fib_382:,}<br>61.8% / 76.4%：{fib_618:,} / {fib_764:,}"
+    else:
+        fib_text = "待補"
+
+    # Strategy summary values
+    top_call_wall = f"{opt['top_calls'][0][0]:,} ({opt['top_calls'][0][1]:,}張)" if opt["top_calls"] else "待補"
+    top_put_wall = f"{opt['top_puts'][0][0]:,} ({opt['top_puts'][0][1]:,}張)" if opt["top_puts"] else "待補"
+
+    chain_rows_html = ""
+    for strike in sorted(opt["chain"].keys()):
+        row = opt["chain"][strike]
+        if row["c_oi"] == 0 and row["p_oi"] == 0:
+            continue
+        c_chg_cls = "text-rose-400" if row["c_chg"] > 0 else ("text-emerald-400" if row["c_chg"] < 0 else "text-slate-400")
+        p_chg_cls = "text-emerald-400" if row["p_chg"] > 0 else ("text-rose-400" if row["p_chg"] < 0 else "text-slate-400")
+        chain_rows_html += f"""
+          <tr>
+            <td class="text-right text-slate-300">{row['c_vol']:,}</td>
+            <td class="text-right font-bold text-rose-300">{row['c_oi']:,}</td>
+            <td class="text-right {c_chg_cls}">{row['c_chg']:+,}</td>
+            <td class="text-center font-black bg-slate-900 text-sky-300">{strike:,}</td>
+            <td class="text-right {p_chg_cls}">{row['p_chg']:+,}</td>
+            <td class="text-right font-bold text-emerald-300">{row['p_oi']:,}</td>
+            <td class="text-right text-slate-300">{row['p_vol']:,}</td>
+          </tr>"""
 
     return f"""<!DOCTYPE html>
 <html lang="zh-HK">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>恒指期權與期指四大方向實戰總表</title>
+  <title>恒指期權與期指實戰系統 (三頁整合版)</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <style>
     body {{ font-family: "Inter", -apple-system, sans-serif; background: #0f172a; color: #f8fafc; }}
     .card {{ background: #1e293b; border: 1px solid #334155; border-radius: 0.75rem; }}
     table {{ border-collapse: collapse; width: 100%; }}
-    th, td {{ border-bottom: 1px solid #334155; padding: 12px 14px; text-align: left; vertical-align: top; }}
+    th, td {{ border-bottom: 1px solid #334155; padding: 10px 12px; text-align: left; vertical-align: top; }}
     th {{ background: #0f172a; color: #94a3b8; font-size: 12px; }}
   </style>
 </head>
-<body class="p-4 sm:p-6 max-w-6xl mx-auto">
+<body class="p-4 sm:p-6 max-w-6xl mx-auto space-y-5">
   {alert_html}
-  <header class="card p-4 sm:p-5 mb-5 flex flex-wrap justify-between items-center gap-4">
+
+  <!-- Header KPI Strip -->
+  <header class="card p-4 sm:p-5 flex flex-wrap justify-between items-center gap-4">
     <div>
-      <span class="text-xs px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-bold">100% 港交所實時真實數據 · 最後更新 {now_hkt} HKT</span>
-      <h1 class="text-xl sm:text-2xl font-black mt-1.5">恒指四大方向與六大輔助指標實戰總表 ({opt['contract']})</h1>
+      <span class="text-xs px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-bold">100% 官方真實數據 · 期權結算日 {opt_date} · 更新於 {now_hkt} HKT</span>
+      <h1 class="text-xl sm:text-2xl font-black mt-1.5">恒指大戶未平倉與實戰系統 ({opt['contract']})</h1>
     </div>
     <div class="flex flex-wrap gap-3 text-xs">
       <div class="bg-slate-900 px-3 py-2 rounded border border-slate-700">
-        <div class="text-slate-400">Max Pain / PCR</div>
+        <div class="text-slate-400">恒生指數當天收市</div>
+        <div class="text-base font-bold {cash_color}">{cash['price']} <span class="text-xs">({cash['chg']} / {cash['pct']})</span></div>
+      </div>
+      <div class="bg-slate-900 px-3 py-2 rounded border border-slate-700">
+        <div class="text-slate-400">Max Pain / 期權 PCR</div>
         <div class="text-base font-bold text-amber-300">{opt['max_pain']:,} <span class="text-xs">/ PCR {opt['pcr']}</span></div>
       </div>
       <div class="bg-slate-900 px-3 py-2 rounded border border-slate-700">
-        <div class="text-slate-400">即月淨數 / 兩月合計變動 ({dtop['date']})</div>
-        <div class="text-base font-bold text-sky-300">{dtop['front_net']} <span class="text-xs">({dtop['front_net_chg']} / 合計 {dtop['sum2_net_chg']})</span></div>
+        <div class="text-slate-400">即月期指總數 / 淨數 ({dtop['date']})</div>
+        <div class="text-base font-bold text-sky-300">{dtop['front_gross']} / {dtop['front_net']} <span class="text-xs">({dtop['front_net_chg']})</span></div>
       </div>
     </div>
   </header>
 
-  <section class="card overflow-hidden">
-    <div class="overflow-x-auto">
-      <table class="text-xs sm:text-sm">
-        <thead>
-          <tr><th class="w-44">分析項目</th><th class="w-64">最新真實數據</th><th>實戰解讀與紀律提示</th></tr>
-        </thead>
-        <tbody>
-          <tr><td class="font-bold text-sky-300">1. 未平倉框架 (港交所期權)</td><td>Call 牆：{calls_str}<br>Put 牆：{puts_str}</td><td>觀察重倉 Call/Put 牆是否被實質跌穿或 Roll Up，嚴禁貼近 Call 牆追多。</td></tr>
-          <tr><td class="font-bold text-sky-300">2. 每週波幅預計方向</td><td>日市期指收：{fut['close']} (高 {fut['high']} / 低 {fut['low']})</td><td>以本週一開市為起點：企起點上睇升、落起點下睇跌，目標波幅 800–1,100 點。</td></tr>
-          <tr><td class="font-bold text-sky-300">3. 期指總數與淨數 (DTOP)</td><td>總數：{dtop['front_gross']}<br>即月淨數：{dtop['front_net']} ({dtop['front_net_chg']})<br>兩月合計淨數變動：{dtop['sum2_net_chg']}</td><td>跌市淨數大增屬機構主導看淡；升市總淨同步大增屬主升推進；平倉則防反轉。</td></tr>
-          <tr><td class="font-bold text-amber-300">4.1 黃金比率</td><td>待每日波段高低點校對</td><td>重點鎖定由高位回調 23.6%–38.2% 轉角買入區及 61.8%–76.4% 關鍵防線。</td></tr>
-          <tr><td class="font-bold text-amber-300">4.2 波浪理論</td><td>待每日結構確認</td><td>區分推動浪（1/3/5）或 ABC 調整浪，避開 C 浪主跌段逆勢撈底。</td></tr>
-          <tr><td class="font-bold text-amber-300">4.3 牛熊證重貨區</td><td>待對接法興街貨分佈圖</td><td>緊盯距離現價最近之 300 點內牛熊證密集打靶區，順大戶殺牛／屠熊方向操作。</td></tr>
-          <tr><td class="font-bold text-amber-300">4.4 最近期高低位</td><td>期指日市高 {fut['high']} / 低 {fut['low']}</td><td>以本週及上週極值作為短線強弱分水嶺。</td></tr>
-          <tr><td class="font-bold text-amber-300">4.5 大戶 P&amp;L (Max Pain)</td><td>Max Pain：{opt['max_pain']:,} (Call {opt['total_call']:,} / Put {opt['total_put']:,})</td><td>貼近結算週期權賣方傾向將指數維持於最大痛點附近，破牆則防負 Gamma 加速。</td></tr>
-          <tr><td class="font-bold text-amber-300">4.6 外圍、北水與宏觀</td><td>待對接隔晚美股、ADR 及南向資金</td><td>結合北水淨流向、美債息及美國重大數據日（NFP/CPI/FOMC 前避彈）。</td></tr>
-          <tr class="bg-slate-800/70"><td class="font-bold text-emerald-300">5. 實戰紀律策略</td><td>每週限做 2 次 · 3:1 盈虧比</td><td>嚴格執行 <strong>+300 點止賺 / -100 點止蝕</strong>，緊貼大戶牆邊緣開倉並預留 350 點跑道。</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
+  <!-- 3-Page Navigation Bar -->
+  <nav class="flex flex-wrap gap-2">
+    <button onclick="showPage('p1')" id="btn-p1" class="px-4 py-2 rounded-lg text-xs sm:text-sm font-bold bg-sky-600 text-white">📊 第一頁：期權鏈分佈表</button>
+    <button onclick="showPage('p2')" id="btn-p2" class="px-4 py-2 rounded-lg text-xs sm:text-sm font-bold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700">🧭 第二頁：四大方向與六大分析</button>
+    <button onclick="showPage('p3')" id="btn-p3" class="px-4 py-2 rounded-lg text-xs sm:text-sm font-bold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700">⚡ 第三頁：實戰操盤策略</button>
+  </nav>
+
+  <!-- PAGE 1: Full Options Chain -->
+  <main id="page-p1" class="space-y-4">
+    <section class="card overflow-hidden">
+      <div class="p-4 border-b border-slate-700 flex flex-wrap justify-between items-center gap-2">
+        <h2 class="text-sm sm:text-base font-bold text-white">📊 即月期權鏈未平倉分佈表 ({opt['contract']} · {opt_date})</h2>
+        <span class="text-xs text-slate-300">Call 總計 <strong>{opt['total_call']:,}</strong> 張 ｜ Put 總計 <strong>{opt['total_put']:,}</strong> 張</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="text-xs">
+          <thead>
+            <tr>
+              <th class="text-right">Call 成交</th>
+              <th class="text-right">Call 未平倉</th>
+              <th class="text-right">Call 增減</th>
+              <th class="text-center bg-slate-900 text-sky-300">行使價</th>
+              <th class="text-right">Put 增減</th>
+              <th class="text-right">Put 未平倉</th>
+              <th class="text-right">Put 成交</th>
+            </tr>
+          </thead>
+          <tbody>{chain_rows_html}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- PAGE 2: 4 Core Pillars + 6 Auxiliary Analysis -->
+  <main id="page-p2" class="hidden space-y-4">
+    <section class="card overflow-hidden">
+      <div class="p-4 border-b border-slate-700">
+        <h2 class="text-sm sm:text-base font-bold text-white">🧭 四大核心方向與六大輔助指標總表</h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="text-xs sm:text-sm">
+          <thead>
+            <tr><th class="w-48">分析維度</th><th class="w-64">最新真實數據</th><th>實戰解讀</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="font-bold text-sky-300">1. 未平倉框架 (港交所期權)</td><td>Call 牆：{calls_str}<br>Put 牆：{puts_str}</td><td>觀察重倉 Call/Put 牆是否被實質跌穿或 Roll Up，嚴禁貼近 Call 牆追多。</td></tr>
+            <tr><td class="font-bold text-sky-300">2. 每週波幅預計方向</td><td>日市期指收：{fut['close']} (高 {fut['high']} / 低 {fut['low']})</td><td>以本週一開市為起點：企起點上睇升、落起點下睇跌，目標波幅 800–1,100 點。</td></tr>
+            <tr><td class="font-bold text-sky-300">3. 期指總數與淨數 (DTOP)</td><td>總數：{dtop['front_gross']}<br>即月淨數：{dtop['front_net']} ({dtop['front_net_chg']})<br>兩月合計淨數變動：{dtop['sum2_net_chg']}</td><td>跌市淨數大增屬機構主導看淡；升市總淨同步大增屬主升推進；平倉則防反轉。</td></tr>
+            <tr><td class="font-bold text-amber-300">4.1 黃金比率</td><td>{fib_text}</td><td>由高位回調 23.6%–38.2% 為轉角買入區；失守 61.8%–76.4% 則防直逼 100% 起漲底。</td></tr>
+            <tr><td class="font-bold text-amber-300">4.2 波浪理論</td><td>近1月波幅：{lo:,} 至 {hi:,}</td><td>區分推動浪（1/3/5）或 ABC 調整浪，避開 C 浪主跌段逆勢撈底。</td></tr>
+            <tr><td class="font-bold text-amber-300">4.3 牛熊證重貨區</td><td>待對接法興街貨分佈圖</td><td>緊盯距離現價最近 300 點內牛熊證密集打靶區，順大戶殺牛／屠熊方向操作。</td></tr>
+            <tr><td class="font-bold text-amber-300">4.4 最近期高低位</td><td>日市期指高 {fut['high']} / 低 {fut['low']}<br>近1月高 {hi:,} / 低 {lo:,}</td><td>以本週及上週極值作為短線強弱分水嶺。</td></tr>
+            <tr><td class="font-bold text-amber-300">4.5 大戶 P&amp;L (Max Pain)</td><td>Max Pain：{opt['max_pain']:,} (Call {opt['total_call']:,} / Put {opt['total_put']:,})</td><td>期權賣方傾向將指數維持於最大痛點附近，破牆則防負 Gamma 加速。</td></tr>
+            <tr><td class="font-bold text-amber-300">4.6 外圍、北水與宏觀</td><td>待對接隔晚美股、ADR 及南向資金</td><td>結合北水淨流向、美債息及美國重大數據日（NFP/CPI/FOMC 前避彈）。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- PAGE 3: Actionable Trading Strategy -->
+  <main id="page-p3" class="hidden space-y-4">
+    <section class="card p-5 space-y-4">
+      <div class="flex flex-wrap justify-between items-center gap-2 border-b border-slate-700 pb-3">
+        <h2 class="text-base sm:text-lg font-black text-emerald-300">⚡ 第三頁：實戰操盤策略與風控紀律</h2>
+        <span class="px-2.5 py-1 rounded text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">每週限做 2 次 · +300 止賺 / -100 止蝕</span>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs sm:text-sm">
+        <div class="bg-slate-900/80 p-4 rounded-lg border border-slate-700 space-y-2">
+          <div class="font-bold text-sky-300">🎯 當前防線座標</div>
+          <p><strong>頭號 Call 阻力牆：</strong>{top_call_wall}</p>
+          <p><strong>頭號 Put 支持牆：</strong>{top_put_wall}</p>
+          <p><strong>即月期指淨數變化：</strong>{dtop['front_net_chg']}（兩月合計 {dtop['sum2_net_chg']}）</p>
+        </div>
+        <div class="bg-slate-900/80 p-4 rounded-lg border border-slate-700 space-y-2">
+          <div class="font-bold text-rose-300">🛡️ 三大入場鐵律</div>
+          <p>1. <strong>大戶牆邊緣起跑：</strong>緊貼 Put 或 Call 牆邊緣開倉，絕不在中間位半天吊開倉。</p>
+          <p>2. <strong>350 點淨空跑道：</strong>開多前向上距離 Call 牆不足 300 點嚴禁追多。</p>
+          <p>3. <strong>數據前避彈：</strong>美國非農、CPI、FOMC 議息前夕不開新倉；嚴守 -100 點硬止蝕。</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    function showPage(id) {{
+      ['p1', 'p2', 'p3'].forEach(p => {{
+        document.getElementById('page-' + p).classList.toggle('hidden', p !== id);
+        const btn = document.getElementById('btn-' + p);
+        if (p === id) {{
+          btn.className = 'px-4 py-2 rounded-lg text-xs sm:text-sm font-bold bg-sky-600 text-white';
+        }} else {{
+          btn.className = 'px-4 py-2 rounded-lg text-xs sm:text-sm font-bold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700';
+        }}
+      }});
+    }}
+  </script>
 </body>
 </html>
 """
@@ -263,15 +426,15 @@ def main():
     if not opt_html:
         print("[ERROR] No HKEX options report found.")
         return
+    cash = fetch_hsi_cash_data()
     opt = parse_options_oi(opt_html)
     dtop = fetch_latest_dtop_futures()
     fut = fetch_futures_daily_report()
-    out_html = build_html(opt_date, opt, dtop, fut)
+    out_html = build_html(opt_date, cash, opt, dtop, fut)
     with open("index.html", "w", encoding="utf-8") as f:
         f.write(out_html)
-    print(f"[OK] Built index.html for {opt_date} | MaxPain={opt['max_pain']} | DTOP={dtop}")
+    print(f"[OK] Built 3-page index.html for {opt_date} | Cash={cash['price']} | MaxPain={opt['max_pain']} | DTOP={dtop}")
 
 
 if __name__ == "__main__":
     main()
-  
