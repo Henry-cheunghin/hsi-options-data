@@ -1,112 +1,56 @@
 name: Auto Update HSI Options Data (HKEX)
 
-
-
 on:
-
-schedule:
-
-# 香港時間 16:50 (UTC 08:50) 日間收市後更新
-
-- cron: '50 8 * * 1-5'
-
-# 香港時間 23:12 (UTC 15:12) 港交所日報首輪抓取
-
-- cron: '12 15 * * 1-5'
-
-# 香港時間 23:22 (UTC 15:22) 備援補抓（避開 23:15 塞車）
-
-- cron: '22 15 * * 1-5'
-
-# 香港時間 23:38 (UTC 15:38) 最終保險補抓
-
-- cron: '38 15 * * 1-5'
-
-# 香港時間 08:05 (UTC 00:05) 開盤前檢查
-
-- cron: '5 0 * * 2-6'
-
-workflow_dispatch:
-
-
+  schedule:
+    # 香港時間 16:50 (UTC 08:50) 日間收市後更新
+    - cron: '50 8 * * 1-5'
+    # 香港時間 23:12 (UTC 15:12) 港交所日報首輪抓取
+    - cron: '12 15 * * 1-5'
+    # 香港時間 23:22 (UTC 15:22) 備援補抓（避開 23:15 塞車）
+    - cron: '22 15 * * 1-5'
+    # 香港時間 23:38 (UTC 15:38) 最終保險補抓
+    - cron: '38 15 * * 1-5'
+    # 香港時間 08:05 (UTC 00:05) 開盤前檢查
+    - cron: '5 0 * * 2-6'
+  workflow_dispatch:
 
 permissions:
-
-contents: write
-
-
+  contents: write
 
 jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Hong_Kong
 
-update-data:
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-runs-on: ubuntu-latest
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-env:
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if grep -qi "playwright" requirements.txt 2>/dev/null; then
+            playwright install chromium
+          fi
 
-TZ: Asia/Hong_Kong
+      - name: Run build_hsi_dashboard.py
+        run: python build_hsi_dashboard.py
 
-
-
-steps:
-
-- name: Checkout repository
-
-uses: actions/checkout@v4
-
-
-
-- name: Set up Python
-
-uses: actions/setup-python@v5
-
-with:
-
-python-version: '3.11'
-
-
-
-- name: Install dependencies
-
-run: |
-
-python -m pip install --upgrade pip
-
-if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
-if grep -qi "playwright" requirements.txt 2>/dev/null; then
-
-playwright install chromium
-
-fi
-
-
-
-- name: Run build_hsi_dashboard.py
-
-run: python build_hsi_dashboard.py
-
-
-
-- name: Commit and push updated data
-
-run: |
-
-git config user.name "github-actions[bot]"
-
-git config user.email "github-actions[bot]@users.noreply.github.com"
-
-git add -A
-
-if git diff --staged --quiet; then
-
-echo "數據暫無變動，跳過推送"
-
-else
-
-git commit -m "chore: auto update HKEX HSI options data ($(date +'%Y-%m-%d %H:%M HKT'))"
-
-git push
-
-fi 
-
+      - name: Commit and push updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "數據暫無變動，跳過推送"
+          else
+            git commit -m "chore: auto update HKEX HSI options data ($(date +'%Y-%m-%d %H:%M HKT'))"
+            git push
+          fi
