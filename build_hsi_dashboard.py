@@ -1,678 +1,291 @@
-import datetime
-import glob
-import json
-import os
-import re
-import sys
-import time
-import pandas as pd
-from playwright.sync_api import sync_playwright
-
-
-def to_num(val):
-    if val is None or val == "":
-        return 0
-    return float(str(val).replace(",", "").replace("%", "").strip())
-
-
-def format_diff(val, force_sign=True):
-    if val is None:
-        return '<span class="text-slate-500">-</span>'
-    val = int(val)
-    if val > 0:
-        prefix = "+" if force_sign else ""
-        return f'<span class="text-rose-400 font-bold">{prefix}{val:,}</span>'
-    elif val < 0:
-        return f'<span class="text-emerald-400 font-bold">{val:,}</span>'
-    return '<span class="text-slate-400">0</span>'
-
-
-def parse_hsif_report(report_text):
-    """解析港交所官方期指每日報告 (hsifYYMMDD.htm) 取得即月/下月/季月/總數之未平倉總數及官方升跌"""
-    lines = report_text.splitlines()
-    month_pattern = re.compile(r"^\s*((?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[\s-]\d{2})(?!/)")
-    total_pattern = re.compile(r"All\s+Contracts\s+Total", re.IGNORECASE)
-
-    contracts = []
-    official_total = None
-
-    for line in lines:
-        m = month_pattern.search(line)
-        if m:
-            nums = [int(x.replace(",", "")) for x in re.findall(r"-?\d[\d,]*", line[m.end():])]
-            if len(nums) >= 4:
-                gross_oi = nums[-2]
-                change_oi = nums[-1]
-                if gross_oi >= 0:
-                    contracts.append({
-                        "month": m.group(1).replace(" ", "-"),
-                        "gross": gross_oi,
-                        "change": change_oi,
-                    })
-        elif total_pattern.search(line):
-            nums = [int(x.replace(",", "")) for x in re.findall(r"-?\d[\d,]*", line)]
-            if len(nums) >= 3:
-                official_total = {
-                    "gross": nums[-2],
-                    "change": nums[-1],
-                }
-
-    return contracts, official_total
-
-
-def parse_hsio_net_by_month(report_text):
-    """解析港交所官方期權每日報告 (hsioYYMMDD.htm)，計算各月份 Put 總未平倉減 Call 總未平倉之淨數"""
-    lines = report_text.splitlines()
-    month_header = re.compile(r"\b((?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[\s-]\d{2})\b")
-    strike_row = re.compile(r"^\s*(\d{4,5})\s+([CP])\b")
-
-    current_mon = None
-    mon_cp = {}
-
-    for line in lines:
-        # 偵測月份區塊標題（非行使價明細行）
-        if not strike_row.match(line):
-            mh = month_header.search(line)
-            if mh and ("CALL" in line.upper() or "PUT" in line.upper() or "CONTRACT" in line.upper() or len(line.strip()) <= 25):
-                current_mon = mh.group(1).replace(" ", "-")
-                if current_mon not in mon_cp:
-                    mon_cp[current_mon] = {"C": 0, "P": 0}
-                continue
-
-        sr = strike_row.match(line)
-        if sr and current_mon:
-            cp_type = sr.group(2)
-            nums = [int(x.replace(",", "")) for x in re.findall(r"-?\d[\d,]*", line[sr.end():])]
-            # hsio 明細行倒數第 2 個數字為未平倉合約 (OI)，倒數第 1 個為升跌
-            if len(nums) >= 2 and nums[-2] >= 0:
-                mon_cp[current_mon][cp_type] += nums[-2]
-
-    return {m: (v["P"] - v["C"]) for m, v in mon_cp.items() if (v["C"] + v["P"]) > 0}
-
-
-def fetch_latest_hkex_data():
-    opt_url = "https://www.hkex.com.hk/Market-Data/Futures-and-Options-Prices/Equity-Index/Hang-Seng-Index-Futures-and-Options?sc_lang=zh-HK"
-    is_cloud = os.environ.get("GITHUB_ACTIONS") == "true" or sys.platform != "win32"
-    print(f"🚀 正在連接港交所官方系統抓取最新數據 (雲端模式: {is_cloud})...")
-    all_widget_urls = []
-    hsif_reports = []
-    hsio_reports = []
-
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=is_cloud,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-            ],
-        )
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-            viewport={"width": 1440, "height": 900},
-        )
-        page = context.new_page()
-        page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-
-        def on_request(request):
-            if "hkexwidget/data/" in request.url:
-                all_widget_urls.append(request.url)
-
-        page.on("request", on_request)
-        page.goto(opt_url, wait_until="domcontentloaded", timeout=60000)
-        time.sleep(5)
-
-        try:
-            opt_tab = page.locator("text=期權").first
-            if opt_tab.is_visible():
-                opt_tab.click()
-                time.sleep(4)
-        except Exception:
-            pass
-
-        for _ in range(6):
-            time.sleep(1.5)
-            page.mouse.wheel(0, 700)
-        time.sleep(3)
-
-        unique_urls = list(dict.fromkeys(all_widget_urls))
-        all_data = {}
-        for idx, u in enumerate(unique_urls):
-            short_name = u.split("hkexwidget/data/")[1].split("?")[0]
-            if short_name in ["getderivativesoption", "getmarketmarquee"]:
-                key_name = f"{short_name}_{idx}"
-                try:
-                    raw_text = page.evaluate(
-                        """async (targetUrl) => {
-                            const res = await fetch(targetUrl);
-                            return await res.text();
-                        }""",
-                        u,
-                    )
-                    s = raw_text.find("(")
-                    e = raw_text.rfind(")")
-                    if s != -1 and e != -1 and e > s:
-                        all_data[key_name] = json.loads(raw_text[s + 1 : e])
-                except Exception:
-                    pass
-
-        today = datetime.datetime.now()
-        for delta in range(8):
-            d = today - datetime.timedelta(days=delta)
-            if d.weekday() >= 5:
-                continue
-            yymmdd = d.strftime("%y%m%d")
-
-            if len(hsif_reports) < 1:
-                try:
-                    txt_f = page.evaluate(
-                        """async (u) => { const r = await fetch(u); return r.ok ? await r.text() : ""; }""",
-                        f"https://www.hkex.com.hk/eng/stat/dmstat/dayrpt/hsif{yymmdd}.htm",
-                    )
-                    if txt_f and "ALL CONTRACTS TOTAL" in txt_f.upper():
-                        print(f"📄 成功讀取港交所官方期指報告：hsif{yymmdd}.htm")
-                        hsif_reports.append((yymmdd, txt_f))
-                except Exception:
-                    pass
-
-            if len(hsio_reports) < 2:
-                try:
-                    txt_o = page.evaluate(
-                        """async (u) => { const r = await fetch(u); return r.ok ? await r.text() : ""; }""",
-                        f"https://www.hkex.com.hk/eng/stat/dmstat/dayrpt/hsio{yymmdd}.htm",
-                    )
-                    if txt_o and "OPEN INTEREST" in txt_o.upper():
-                        print(f"📄 成功讀取港交所官方期權報告：hsio{yymmdd}.htm")
-                        hsio_reports.append((yymmdd, txt_o))
-                except Exception:
-                    pass
-
-            if len(hsif_reports) >= 1 and len(hsio_reports) >= 2:
-                break
-
-        browser.close()
-
-    all_data["_hsif_reports"] = hsif_reports
-    all_data["_hsio_reports"] = hsio_reports
-    return all_data
-
-
-def build_combined_breakdown(hsif_reports, hsio_reports, spot_call_oi, spot_put_oi, prev_summary):
-    mon_order = {"JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6, "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12}
-
-    def sort_mon(m):
-        p = m.split("-")
-        return (int(p[1]), mon_order.get(p[0], 99))
-
-    bd = {
-        "spot": {"label": "即月", "gross": 0, "gross_diff": None, "net": None, "net_diff": None},
-        "next": {"label": "下月", "gross": 0, "gross_diff": None, "net": None, "net_diff": None},
-        "quarter": {"label": "季月", "gross": 0, "gross_diff": None, "net": None, "net_diff": None},
-        "total": {"label": "總數", "gross": 0, "gross_diff": None, "net": None, "net_diff": None},
-    }
-
-    # 1. 填充期指未平倉總數 (Gross OI) 及升跌
-    unique_contracts = []
-    if hsif_reports:
-        cur_contracts, cur_total = parse_hsif_report(hsif_reports[0][1])
-        seen = set()
-        for c in cur_contracts:
-            if c["month"] not in seen:
-                seen.add(c["month"])
-                unique_contracts.append(c)
-
-        for idx, c in enumerate(unique_contracts):
-            if idx == 0:
-                bd["spot"]["label"] = f"即月 ({c['month']})"
-                bd["spot"]["gross"] = c["gross"]
-                bd["spot"]["gross_diff"] = c["change"]
-            elif idx == 1:
-                bd["next"]["label"] = f"下月 ({c['month']})"
-                bd["next"]["gross"] = c["gross"]
-                bd["next"]["gross_diff"] = c["change"]
-            else:
-                bd["quarter"]["gross"] += c["gross"]
-                bd["quarter"]["gross_diff"] = (bd["quarter"]["gross_diff"] or 0) + c["change"]
-
-        if cur_total and cur_total["gross"] > 0:
-            bd["total"]["gross"] = cur_total["gross"]
-            bd["total"]["gross_diff"] = cur_total["change"]
-        else:
-            bd["total"]["gross"] = bd["spot"]["gross"] + bd["next"]["gross"] + bd["quarter"]["gross"]
-            bd["total"]["gross_diff"] = (bd["spot"]["gross_diff"] or 0) + (bd["next"]["gross_diff"] or 0) + (bd["quarter"]["gross_diff"] or 0)
-
-    # 2. 填充各月份未平倉淨數 (Put - Call) 並與上個交易日相減計出淨數升/跌
-    cur_net_map = parse_hsio_net_by_month(hsio_reports[0][1]) if hsio_reports else {}
-    prev_net_map = parse_hsio_net_by_month(hsio_reports[1][1]) if len(hsio_reports) >= 2 else {}
-
-    if cur_net_map:
-        mons = sorted(cur_net_map.keys(), key=sort_mon)
-        for idx, m in enumerate(mons):
-            n_val = cur_net_map[m]
-            p_val = prev_net_map.get(m)
-            if idx == 0:
-                if bd["spot"]["label"] == "即月":
-                    bd["spot"]["label"] = f"即月 ({m})"
-                bd["spot"]["net"] = n_val
-                if p_val is not None:
-                    bd["spot"]["net_diff"] = n_val - p_val
-            elif idx == 1:
-                if bd["next"]["label"] == "下月":
-                    bd["next"]["label"] = f"下月 ({m})"
-                bd["next"]["net"] = n_val
-                if p_val is not None:
-                    bd["next"]["net_diff"] = n_val - p_val
-            else:
-                bd["quarter"]["net"] = (bd["quarter"]["net"] or 0) + n_val
-                if p_val is not None:
-                    bd["quarter"]["net_diff"] = (bd["quarter"]["net_diff"] or 0) + (n_val - p_val)
-    else:
-        # 備用：使用即時即月 Put - Call 並與本地上日快照相減
-        bd["spot"]["net"] = spot_put_oi - spot_call_oi
-        if prev_summary and "breakdown" in prev_summary:
-            p_spot = prev_summary["breakdown"].get("spot", {}).get("net")
-            if p_spot is not None:
-                bd["spot"]["net_diff"] = bd["spot"]["net"] - int(p_spot)
-
-    # 計算總數淨數及總數淨數升跌
-    net_parts = [bd[k]["net"] for k in ["spot", "next", "quarter"] if bd[k]["net"] is not None]
-    if net_parts:
-        bd["total"]["net"] = sum(net_parts)
-
-    diff_parts = [bd[k]["net_diff"] for k in ["spot", "next", "quarter"] if bd[k]["net_diff"] is not None]
-    if diff_parts:
-        bd["total"]["net_diff"] = sum(diff_parts)
-    elif prev_summary and "breakdown" in prev_summary and bd["total"]["net"] is not None:
-        p_tot = prev_summary["breakdown"].get("total", {}).get("net")
-        if p_tot is not None:
-            bd["total"]["net_diff"] = bd["total"]["net"] - int(p_tot)
-
-    return bd
-
-
-def load_previous_day_data(today_tag):
-    os.makedirs("history_data", exist_ok=True)
-    files = sorted(glob.glob("history_data/HSI_Options_*.csv"))
-    prev_files = [f for f in files if today_tag not in os.path.basename(f)]
-    if not prev_files:
-        return None
-    latest_prev = prev_files[-1]
-    try:
-        prev_df = pd.read_csv(latest_prev)
-        return prev_df.set_index("strike").to_dict("index")
-    except Exception:
-        return None
-
-
-def load_previous_summary(today_tag):
-    files = sorted(glob.glob("history_data/HSI_Summary_*.json"))
-    prev_files = [f for f in files if today_tag not in os.path.basename(f)]
-    if not prev_files:
-        return None
-    try:
-        with open(prev_files[-1], "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return None
-
-
-def generate_dashboard_and_api(data):
-    hsi_spot = 0
-    hsi_change = ""
-    for k, v in data.items():
-        if "getmarketmarquee" in k:
-            for idx_item in v.get("data", {}).get("indices", []):
-                if idx_item.get("ric") == ".HSI":
-                    hsi_spot = to_num(idx_item.get("ls"))
-                    hsi_change = f"{idx_item.get('nc')} ({idx_item.get('pc')}%)"
-
-    best_opt = None
-    for k, v in data.items():
-        if "getderivativesoption" in k and isinstance(v, dict):
-            d = v.get("data", {})
-            opt_list = d.get("optionlist", [])
-            if best_opt is None or len(opt_list) > len(best_opt.get("optionlist", [])):
-                best_opt = d
-
-    if not best_opt:
-        print("❌ 未能獲取期權鏈數據，保留舊版網頁不覆蓋。")
-        sys.exit(1)
-
-    last_upd = best_opt.get("lastupd", datetime.datetime.now().strftime("%d/%m/%Y %H:%M"))
-    opt_list = best_opt.get("optionlist", [])
-    today_tag = datetime.datetime.now().strftime("%Y%m%d")
-    prev_map = load_previous_day_data(today_tag)
-    prev_summary = load_previous_summary(today_tag)
-
-    rows = []
-    for item in opt_list:
-        strike = int(to_num(item.get("strike")))
-        c = item.get("c", {})
-        p = item.get("p", {})
-
-        c_oi = int(to_num(c.get("oi")))
-        c_vol = int(to_num(c.get("vo")))
-        p_oi = int(to_num(p.get("oi")))
-        p_vol = int(to_num(p.get("vo")))
-
-        if prev_map and strike in prev_map:
-            prev_row = prev_map[strike]
-            prev_c_oi = int(to_num(prev_row.get("call_oi", 0)))
-            prev_c_vol = int(to_num(prev_row.get("call_vol", 0)))
-            prev_p_oi = int(to_num(prev_row.get("put_oi", 0)))
-            prev_p_vol = int(to_num(prev_row.get("put_vol", 0)))
-
-            c_oi_diff = c_oi - prev_c_oi
-            c_vol_diff = c_vol - prev_c_vol
-            p_oi_diff = p_oi - prev_p_oi
-            p_vol_diff = p_vol - prev_p_vol
-        else:
-            prev_c_oi = None
-            prev_c_vol = None
-            prev_p_oi = None
-            prev_p_vol = None
-            c_oi_diff = None
-            c_vol_diff = None
-            p_oi_diff = None
-            p_vol_diff = None
-
-        rows.append(
-            {
-                "call_iv": c.get("iv", "-"),
-                "call_vol_diff": c_vol_diff,
-                "prev_call_vol": prev_c_vol,
-                "call_vol": c_vol,
-                "call_oi_diff": c_oi_diff,
-                "prev_call_oi": prev_c_oi,
-                "call_oi": c_oi,
-                "strike": strike,
-                "put_oi": p_oi,
-                "prev_put_oi": prev_p_oi,
-                "put_oi_diff": p_oi_diff,
-                "put_vol": p_vol,
-                "prev_put_vol": prev_p_vol,
-                "put_vol_diff": p_vol_diff,
-                "put_iv": p.get("iv", "-"),
-            }
-        )
-
-    df = pd.DataFrame(rows).sort_values("strike").reset_index(drop=True)
-
-    total_call_oi = int(df["call_oi"].sum())
-    total_put_oi = int(df["put_oi"].sum())
-    pcr = round(total_put_oi / total_call_oi, 2) if total_call_oi > 0 else 0
-
-    bd = build_combined_breakdown(
-        data.get("_hsif_reports", []),
-        data.get("_hsio_reports", []),
-        total_call_oi,
-        total_put_oi,
-        prev_summary,
-    )
-
-    top_calls = df.nlargest(3, "call_oi")[["strike", "call_oi"]].to_dict("records")
-    top_puts = df.nlargest(3, "put_oi")[["strike", "put_oi"]].to_dict("records")
-
-    strikes = df["strike"].values
-    call_ois = df["call_oi"].values
-    put_ois = df["put_oi"].values
-    min_pain = float("inf")
-    max_pain_strike = 0
-    for s in strikes:
-        pain = sum(max(0, s - k) * oi for k, oi in zip(strikes, call_ois)) + sum(
-            max(0, k - s) * oi for k, oi in zip(strikes, put_ois)
-        )
-        if pain < min_pain:
-            min_pain = pain
-            max_pain_strike = int(s)
-
-    api_payload = {
-        "source": "HKEX Official",
-        "last_updated": last_upd,
-        "hsi_spot": hsi_spot,
-        "hsi_change": hsi_change,
-        "metrics": {
-            "max_pain": max_pain_strike,
-            "total_call_oi": total_call_oi,
-            "total_put_oi": total_put_oi,
-            "put_call_ratio": pcr,
-            "breakdown": bd,
-            "top_call_walls": top_calls,
-            "top_put_walls": top_puts,
-        },
-        "option_chain": df.where(pd.notnull(df), None).to_dict("records"),
-    }
-
-    with open("latest_hsi_options.json", "w", encoding="utf-8") as f:
-        json.dump(api_payload, f, ensure_ascii=False, indent=2)
-    df.to_csv("latest_hsi_options.csv", index=False, encoding="utf-8-sig")
-    df.to_csv(f"history_data/HSI_Options_{today_tag}.csv", index=False, encoding="utf-8-sig")
-    with open(f"history_data/HSI_Summary_{today_tag}.json", "w", encoding="utf-8") as f:
-        json.dump(api_payload["metrics"], f, ensure_ascii=False, indent=2)
-
-    max_oi_single = max(df["call_oi"].max(), df["put_oi"].max(), 1)
-    table_rows_html = ""
-    for _, r in df.iterrows():
-        s = int(r["strike"])
-        if r["call_oi"] == 0 and r["put_oi"] == 0 and abs(s - (hsi_spot or max_pain_strike)) > 3000:
-            continue
-
-        c_pct = round((r["call_oi"] / max_oi_single) * 100, 1)
-        p_pct = round((r["put_oi"] / max_oi_single) * 100, 1)
-        is_atm = hsi_spot > 0 and abs(s - hsi_spot) <= 100
-        is_mp = s == max_pain_strike
-        row_bg = (
-            "bg-amber-500/20 border-y border-amber-400/50"
-            if is_atm
-            else ("bg-purple-500/15" if is_mp else "hover:bg-slate-800/60")
-        )
-        badge = ""
-        if is_atm:
-            badge += '<span class="ml-1 px-1.5 py-0.5 text-[10px] bg-amber-500 text-slate-950 font-bold rounded">現價</span>'
-        if is_mp:
-            badge += '<span class="ml-1 px-1.5 py-0.5 text-[10px] bg-purple-500 text-white font-bold rounded">MP</span>'
-
-        prev_c_oi_txt = f"{int(r['prev_call_oi']):,}" if pd.notnull(r["prev_call_oi"]) else "-"
-        prev_c_vol_txt = f"{int(r['prev_call_vol']):,}" if pd.notnull(r["prev_call_vol"]) else "-"
-        prev_p_oi_txt = f"{int(r['prev_put_oi']):,}" if pd.notnull(r["prev_put_oi"]) else "-"
-        prev_p_vol_txt = f"{int(r['prev_put_vol']):,}" if pd.notnull(r["prev_put_vol"]) else "-"
-
-        c_oi_diff_html = format_diff(r["call_oi_diff"] if pd.notnull(r["call_oi_diff"]) else None)
-        c_vol_diff_html = format_diff(r["call_vol_diff"] if pd.notnull(r["call_vol_diff"]) else None)
-        p_oi_diff_html = format_diff(r["put_oi_diff"] if pd.notnull(r["put_oi_diff"]) else None)
-        p_vol_diff_html = format_diff(r["put_vol_diff"] if pd.notnull(r["put_vol_diff"]) else None)
-
-        table_rows_html += f"""
-        <tr class="border-b border-slate-800 text-xs sm:text-sm {row_bg}">
-            <td class="py-2 px-1.5 text-right font-mono text-slate-400 hidden lg:table-cell">{r['call_iv']}%</td>
-            <td class="py-2 px-1.5 text-right font-mono hidden md:table-cell">{c_vol_diff_html}</td>
-            <td class="py-2 px-1.5 text-right font-mono text-slate-400 hidden lg:table-cell">{prev_c_vol_txt}</td>
-            <td class="py-2 px-1.5 text-right font-mono text-slate-300 hidden sm:table-cell">{int(r['call_vol']):,}</td>
-            <td class="py-2 px-1.5 text-right font-mono">{c_oi_diff_html}</td>
-            <td class="py-2 px-1.5 text-right font-mono text-slate-400 hidden md:table-cell">{prev_c_oi_txt}</td>
-            <td class="py-2 px-2 text-right font-mono relative bg-rose-950/20">
-                <div class="absolute right-0 top-1 bottom-1 bg-rose-500/30 rounded-l" style="width:{c_pct}%"></div>
-                <span class="relative z-10 font-bold text-rose-300">{int(r['call_oi']):,}</span>
-            </td>
-
-            <td class="py-2 px-2.5 text-center font-mono font-extrabold text-white bg-slate-900 border-x border-slate-700 whitespace-nowrap">
-                {s:,}{badge}
-            </td>
-
-            <td class="py-2 px-2 text-left font-mono relative bg-emerald-950/20">
-                <div class="absolute left-0 top-1 bottom-1 bg-emerald-500/30 rounded-r" style="width:{p_pct}%"></div>
-                <span class="relative z-10 font-bold text-emerald-300">{int(r['put_oi']):,}</span>
-            </td>
-            <td class="py-2 px-1.5 text-left font-mono text-slate-400 hidden md:table-cell">{prev_p_oi_txt}</td>
-            <td class="py-2 px-1.5 text-left font-mono">{p_oi_diff_html}</td>
-            <td class="py-2 px-1.5 text-left font-mono text-slate-300 hidden sm:table-cell">{int(r['put_vol']):,}</td>
-            <td class="py-2 px-1.5 text-left font-mono text-slate-400 hidden lg:table-cell">{prev_p_vol_txt}</td>
-            <td class="py-2 px-1.5 text-left font-mono hidden md:table-cell">{p_vol_diff_html}</td>
-            <td class="py-2 px-1.5 text-left font-mono text-slate-400 hidden lg:table-cell">{r['put_iv']}%</td>
-        </tr>
-        """
-
-    call_wall_html = "".join(
-        [
-            f'<div class="flex justify-between text-sm py-1 border-b border-slate-800/60"><span class="font-mono font-bold text-rose-400">{x["strike"]:,}</span><span class="font-mono text-slate-200">{x["call_oi"]:,} 張</span></div>'
-            for x in top_calls
-        ]
-    )
-    put_wall_html = "".join(
-        [
-            f'<div class="flex justify-between text-sm py-1 border-b border-slate-800/60"><span class="font-mono font-bold text-emerald-400">{x["strike"]:,}</span><span class="font-mono text-slate-200">{x["put_oi"]:,} 張</span></div>'
-            for x in top_puts
-        ]
-    )
-
-    def render_summary_row(key, is_total=False):
-        item = bd[key]
-        row_style = "bg-sky-950/80 font-extrabold text-amber-300 border-t border-sky-700/70" if is_total else "border-b border-slate-800/70 text-slate-200"
-        gross_txt = f"{item['gross']:,}" if item["gross"] > 0 else "-"
-        net_txt = f"{item['net']:+,}" if item["net"] is not None else "-"
-        return f"""
-        <tr class="{row_style} text-xs sm:text-sm">
-            <td class="py-1.5 px-4 text-left font-semibold text-sky-300">{item['label']}</td>
-            <td class="py-1.5 px-4 text-right font-mono font-bold">{gross_txt}</td>
-            <td class="py-1.5 px-4 text-right font-mono border-r border-slate-700">{format_diff(item['gross_diff'])}</td>
-            <td class="py-1.5 px-4 text-right font-mono font-bold">{net_txt}</td>
-            <td class="py-1.5 px-4 text-right font-mono">{format_diff(item['net_diff'])}</td>
-        </tr>
-        """
-
-    summary_rows_html = (
-        render_summary_row("spot")
-        + render_summary_row("next")
-        + render_summary_row("quarter")
-        + render_summary_row("total", is_total=True)
-    )
-
-    html = f"""<!DOCTYPE html>
-<html lang="zh-HK" class="dark">
+<!DOCTYPE html>
+<html lang="zh-HK">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>恒生指數期權未平倉大數據監控 | HKEX 官方實戰版</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>恒指四大方向實戰分析總表 (2026-11-19 星期四 · 11/18 結算更新版)</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <style>
+    body {
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #0f172a;
+      color: #f8fafc;
+    }
+    .glass-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 0.75rem;
+    }
+    .alert-banner {
+      background: linear-gradient(90deg, rgba(225, 29, 72, 0.30), rgba(15, 23, 42, 0.96));
+      border: 1px solid rgba(244, 63, 94, 0.8);
+      border-radius: 0.75rem;
+    }
+    .badge-bull { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+    .badge-bear { background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.4); }
+    .badge-warn { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+    .badge-info { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border-bottom: 1px solid #334155; padding: 12px 14px; text-align: left; vertical-align: top; }
+    th { background-color: #0f172a; color: #94a3b8; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+    tr:hover td { background-color: rgba(51, 65, 85, 0.35); }
+  </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen font-sans">
-    <div class="max-w-[1440px] mx-auto px-3 sm:px-6 py-6">
-        <header class="flex flex-col md:flex-row md:items-center md:justify-between pb-5 border-b border-slate-800 gap-4">
-            <div>
-                <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-white">恒生指數期權 (HSI Options) 未平倉分布</h1>
-                <p class="text-xs sm:text-sm text-slate-400 mt-1">數據源：香港交易所 (HKEX) 官方系統 ｜ 最後更新：<span class="text-amber-400 font-mono">{last_upd}</span> ｜ API：<a href="./latest_hsi_options.json" class="underline text-sky-400">JSON</a> / <a href="./latest_hsi_options.csv" class="underline text-sky-400">CSV</a></p>
-            </div>
-            <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-right">
-                <div class="text-xs text-slate-400">恒生指數最新 / 收市</div>
-                <div class="text-xl font-mono font-bold text-white">{hsi_spot:,.2f} <span class="text-xs font-normal text-slate-300">{hsi_change}</span></div>
-            </div>
-        </header>
+<body class="p-3 sm:p-6 max-w-6xl mx-auto space-y-5">
 
-        <!-- 核心決策卡片 -->
-        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 my-5">
-            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
-                <div class="text-xs text-slate-400 uppercase tracking-wider">期權最大痛點 (Max Pain)</div>
-                <div class="text-3xl font-mono font-extrabold text-purple-400 mt-2">{max_pain_strike:,}</div>
-                <div class="text-xs text-slate-400 mt-2">莊家結算賠付最小化核心區</div>
-            </div>
-            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
-                <div class="text-xs text-slate-400 uppercase tracking-wider mb-1">大戶 Call 重兵阻力牆 Top 3</div>
-                {call_wall_html}
-            </div>
-            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
-                <div class="text-xs text-slate-400 uppercase tracking-wider mb-1">大戶 Put 重兵支持牆 Top 3</div>
-                {put_wall_html}
-            </div>
-            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
-                <div class="text-xs text-slate-400 uppercase tracking-wider">即月期權 Put/Call 比率 (PCR)</div>
-                <div class="text-3xl font-mono font-extrabold text-amber-400 mt-2">{pcr}</div>
-                <div class="text-xs text-slate-300 mt-2 font-mono">即月 Call: {total_call_oi:,} ｜ Put: {total_put_oi:,}</div>
-            </div>
-        </section>
-
-        <!-- 釘死在視窗頂端的【單一簡潔格仔：未平倉總數(期指) & 未平倉淨數(期權P-C) 及各自升跌】＋【Call/Put雙層欄位表頭】 -->
-        <div class="sticky top-0 z-30 shadow-2xl bg-slate-950">
-            <div class="bg-slate-900 border-t border-x border-sky-700/70 rounded-t-2xl overflow-hidden">
-                <table class="w-full border-collapse">
-                    <thead>
-                        <tr class="bg-sky-950/90 text-xs text-sky-300 border-b border-sky-800/70">
-                            <th class="py-1.5 px-4 text-left font-bold w-1/5">合約月份</th>
-                            <th class="py-1.5 px-4 text-right font-bold w-1/5">未平倉總數 (期指)</th>
-                            <th class="py-1.5 px-4 text-right font-bold w-1/5 border-r border-slate-700">總數升/跌</th>
-                            <th class="py-1.5 px-4 text-right font-bold w-1/5">未平倉淨數 (期權P-C)</th>
-                            <th class="py-1.5 px-4 text-right font-bold w-1/5">淨數升/跌</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {summary_rows_html}
-                    </tbody>
-                </table>
-            </div>
-
-            <table class="w-full border-collapse table-fixed">
-                <thead>
-                    <tr class="text-xs sm:text-sm font-bold tracking-wider border-y border-slate-700">
-                        <th colspan="7" class="py-2 px-2 text-center bg-indigo-900 text-white border-r border-slate-700">Call（認購期權 · 上方阻力）</th>
-                        <th class="py-2 px-2 text-center bg-slate-950 text-amber-400 w-24 sm:w-28">行使價</th>
-                        <th colspan="7" class="py-2 px-2 text-center bg-sky-900 text-white border-l border-slate-700">Put（認沽期權 · 下方支持）</th>
-                    </tr>
-                    <tr class="bg-slate-800 text-[11px] sm:text-xs text-slate-100 border-b-2 border-slate-600 whitespace-nowrap">
-                        <th class="py-2 px-1.5 text-right hidden lg:table-cell">IV</th>
-                        <th class="py-2 px-1.5 text-right hidden md:table-cell">成交增減</th>
-                        <th class="py-2 px-1.5 text-right hidden lg:table-cell">上日成交</th>
-                        <th class="py-2 px-1.5 text-right hidden sm:table-cell">成交</th>
-                        <th class="py-2 px-1.5 text-right">未平倉增減</th>
-                        <th class="py-2 px-1.5 text-right hidden md:table-cell">上日未平倉</th>
-                        <th class="py-2 px-2 text-right text-rose-300 font-extrabold bg-rose-950/60">未平倉</th>
-
-                        <th class="py-2 px-2 text-center bg-slate-950 font-mono text-white w-24 sm:w-28">STRIKE</th>
-
-                        <th class="py-2 px-2 text-left text-emerald-300 font-extrabold bg-emerald-950/60">未平倉</th>
-                        <th class="py-2 px-1.5 text-left hidden md:table-cell">上日未平倉</th>
-                        <th class="py-2 px-1.5 text-left">未平倉增減</th>
-                        <th class="py-2 px-1.5 text-left hidden sm:table-cell">成交</th>
-                        <th class="py-2 px-1.5 text-left hidden lg:table-cell">上日成交</th>
-                        <th class="py-2 px-1.5 text-left hidden md:table-cell">成交增減</th>
-                        <th class="py-2 px-1.5 text-left hidden lg:table-cell">IV</th>
-                    </tr>
-                </thead>
-            </table>
-        </div>
-
-        <section class="bg-slate-900/90 border-x border-b border-slate-800 rounded-b-2xl shadow-2xl">
-            <table class="w-full border-collapse table-fixed">
-                <colgroup>
-                    <col class="hidden lg:table-column">
-                    <col class="hidden md:table-column">
-                    <col class="hidden lg:table-column">
-                    <col class="hidden sm:table-column">
-                    <col>
-                    <col class="hidden md:table-column">
-                    <col>
-                    <col class="w-24 sm:w-28">
-                    <col>
-                    <col class="hidden md:table-column">
-                    <col>
-                    <col class="hidden sm:table-column">
-                    <col class="hidden lg:table-column">
-                    <col class="hidden md:table-column">
-                    <col class="hidden lg:table-column">
-                </colgroup>
-                <tbody>
-                    {table_rows_html}
-                </tbody>
-            </table>
-        </section>
+  <!-- Mandatory Rule 0 Directional Alert Banner -->
+  <div class="alert-banner p-4 sm:p-5 shadow-lg">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <div class="text-sm sm:text-base font-black text-rose-400">
+        🚨🚨【極端級別機構單邊睇淡警報 · 即月淨數單日暴增 +4,872 張】
+      </div>
+      <span class="px-2.5 py-0.5 rounded text-xs font-bold badge-bear">嚴禁撈底買升 · 順勢高空為主</span>
     </div>
+    <p class="text-xs sm:text-sm text-slate-200 mt-2 leading-relaxed">
+      11/18 結算數據全面確認機構強力造淡：<strong>(1)</strong> 即月期指（NOV-26）<strong>未平倉總數大增 +3,390 張</strong>至 121,352 張，<strong>未平倉淨數更單日暴增 +4,872 張</strong>至 40,310 張；<strong>(2)</strong> 原重兵 23,400 Put 牆減倉 <strong>-190 張</strong>撤退，大戶改於 <strong>23,400 Call (+185 張)</strong> 壓頂；<strong>(3)</strong> 23:44 夜期已插穿 23,100 殺牛區至 <strong>23,129</strong>（低見 23,097，低水 166 點）。
+    </p>
+  </div>
+
+  <!-- Header -->
+  <header class="glass-card p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
+    <div>
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="px-2.5 py-0.5 rounded-full text-xs font-bold badge-info">HSI Trading System · 11/18 晚間結算完整數據</span>
+        <span class="text-xs text-slate-400">數據來源：投創教育 HKIEI ＋ 港交所 (23:44 HKT)</span>
+      </div>
+      <h1 class="text-xl sm:text-2xl font-black text-white mt-1.5">恒指四大核心方向與六大輔助指標實戰總表 (2026-11-19 星期四)</h1>
+    </div>
+    <div class="flex flex-wrap gap-3 text-xs">
+      <div class="bg-slate-900/80 px-3 py-2 rounded-lg border border-slate-700">
+        <div class="text-slate-400">11/18 現貨 / 日市期指結算</div>
+        <div class="text-base font-bold text-rose-400">23,294.75 / 23,226 <span class="text-xs">(低水 69)</span></div>
+      </div>
+      <div class="bg-slate-900/80 px-3 py-2 rounded-lg border border-slate-700">
+        <div class="text-slate-400">11/18 夜期 (23:44 HKT)</div>
+        <div class="text-base font-bold text-rose-400">23,129 <span class="text-xs">(-361 · 低水 166 點)</span></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Quick Filter Tabs -->
+  <div class="flex flex-wrap gap-2 text-xs">
+    <button onclick="filterRows('all')" id="tabAll" class="px-3 py-1.5 rounded-lg font-bold bg-sky-600 text-white">📋 全部項目 (10項)</button>
+    <button onclick="filterRows('core')" id="tabCore" class="px-3 py-1.5 rounded-lg font-bold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700">🎯 三大核心方向 (1–3)</button>
+    <button onclick="filterRows('aux')" id="tabAux" class="px-3 py-1.5 rounded-lg font-bold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700">🧭 六大輔助驗證 (4.1–4.6)</button>
+    <button onclick="filterRows('plan')" id="tabPlan" class="px-3 py-1.5 rounded-lg font-bold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700">⚡ 週四實戰劇本</button>
+  </div>
+
+  <!-- Master Structured Table -->
+  <section class="glass-card overflow-hidden shadow-xl">
+    <div class="overflow-x-auto">
+      <table id="forecastTable" class="text-xs sm:text-sm">
+        <thead>
+          <tr>
+            <th class="w-36 sm:w-44">分析維度 / 項目</th>
+            <th class="w-52 sm:w-64">11/18 最新真實結算數據</th>
+            <th class="w-28">多空偏向</th>
+            <th>實戰解讀與操作啟示</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800">
+          <!-- Pillar 1 -->
+          <tr class="row-item" data-cat="core">
+            <td class="font-bold text-sky-300">
+              1. 未平倉框架<br>
+              <span class="text-[11px] font-normal text-slate-400">NOV-26 期權鏈 (HKIEI)</span>
+            </td>
+            <td class="space-y-1">
+              <div><span class="text-rose-400 font-bold">Call 天花板：</span>24,000 (<strong>1,671</strong>, +80) / 24,400 (1,128, -2) / 23,400 (707, <span class="text-rose-300 font-bold">+185</span>)</div>
+              <div><span class="text-emerald-400 font-bold">Put 牆下移：</span><strong>23,000 (1,381, +483)</strong> / <strong>22,800 (1,257, +420)</strong> / 22,000 (1,191, +143)</div>
+              <div class="text-[11px] text-slate-400">原 23,400 Put 減至 992 (-190) · 23,000 Put 成交 1,210 張</div>
+            </td>
+            <td><span class="px-2 py-0.5 rounded text-xs font-bold badge-bear">重心下移 23,000</span></td>
+            <td class="text-slate-200 leading-relaxed">
+              大戶於 <strong>23,400 Put (-190張)</strong> 及 23,600 Put (-62張) 止蝕撤退，同時喺 <strong>23,400 Call (+185張)</strong> 壓頂，並將下方重兵防線全面退守至 <strong>23,000 (1,381張)</strong> 及 <strong>22,800 (1,257張)</strong>！
+            </td>
+          </tr>
+
+          <!-- Pillar 2 -->
+          <tr class="row-item" data-cat="core">
+            <td class="font-bold text-sky-300">
+              2. 每週波幅預計方向<br>
+              <span class="text-[11px] font-normal text-slate-400">週一起點原則</span>
+            </td>
+            <td class="space-y-1">
+              <div><strong>週一起點：</strong>23,708 (現貨) / 23,678 (期指)</div>
+              <div><strong>本週至今高低：</strong>23,890 (11/16) / <strong>23,097</strong> (11/18夜期)</div>
+              <div><strong>已行波幅：</strong><strong>793 點</strong> (目標 800–1,100 點)</div>
+            </td>
+            <td><span class="px-2 py-0.5 rounded text-xs font-bold badge-bear">起點下衝刺</span></td>
+            <td class="text-slate-200 leading-relaxed">
+              夜期跌見 23,097 後，本週累積波幅已達 <strong>793 點</strong>，正逼近 800–1,100 點目標下限（對應 <strong>23,090 至 22,790</strong>），完全符合「起點之下睇跌直至達標」原則。
+            </td>
+          </tr>
+
+          <!-- Pillar 3 -->
+          <tr class="row-item" data-cat="core">
+            <td class="font-bold text-sky-300">
+              3. 期指未平倉總數/淨數<br>
+              <span class="text-[11px] font-normal text-slate-400">11/18 結算實數 (HKIEI)</span>
+            </td>
+            <td class="space-y-1">
+              <div><strong>11月總數：</strong><strong>121,352</strong> (<span class="text-rose-400 font-bold">+3,390 張</span>)</div>
+              <div><strong>11月淨數：</strong><strong>40,310</strong> (<span class="text-rose-400 font-bold">+4,872 張</span>)</div>
+              <div class="text-[11px] text-slate-400">11/18 現貨 -213.42 / 期指收 23,226 (-264)</div>
+            </td>
+            <td><span class="px-2 py-0.5 rounded text-xs font-bold badge-bear">大戶狂加空倉</span></td>
+            <td class="text-slate-200 leading-relaxed">
+              極罕見強力睇淡訊號！今日跌市之下，即月總數大增 <strong>+3,390 張</strong>，淨數更單日狂飆 <strong>+4,872 張</strong>（超越 +800 張警報線 6 倍），代表大戶及機構正全力開新空單落去，完全唔似見底！
+            </td>
+          </tr>
+
+          <!-- Aux 4.1 -->
+          <tr class="row-item" data-cat="aux">
+            <td class="font-bold text-amber-300">
+              4.1 黃金比率<br>
+              <span class="text-[11px] font-normal text-slate-400">22,943 至 24,897</span>
+            </td>
+            <td class="space-y-1">
+              <div>76.4% 防線：<span class="text-rose-400">23,404 (已失守轉鐵阻)</span></div>
+              <div>100% 起漲底：<strong class="text-sky-300">22,943</strong></div>
+            </td>
+            <td><span class="px-2 py-0.5 rounded text-xs font-bold badge-bear">直逼 100% 底</span></td>
+            <td class="text-slate-200 leading-relaxed">
+              失守 76.4%（23,404）後跌勢加速，夜期 23,129 距離 100% 起漲底 <strong>22,943</strong> 僅餘約 186 點。
+            </td>
+          </tr>
+
+          <!-- Aux 4.2 -->
+          <tr class="row-item" data-cat="aux">
+            <td class="font-bold text-amber-300">
+              4.2 波浪理論<br>
+              <span class="text-[11px] font-normal text-slate-400">Elliott Wave 浪型</span>
+            </td>
+            <td class="space-y-1">
+              <div>A 浪：24,897 ➜ 23,562 (1,335點)</div>
+              <div>B 浪：23,562 ➜ 23,890</div>
+              <div>C 浪延伸：23,890 ➜ 23,097 (進行中)</div>
+            </td>
+            <td><span class="px-2 py-0.5 rounded text-xs font-bold badge-bear">C 浪加速段</span></td>
+            <td class="text-slate-200 leading-relaxed">
+              C 浪正朝 0.618–0.764 倍等幅目標（<strong>23,065 至 22,870</strong>）進發，在淨空倉單日 +4,872 張壓力下仍未見轉折底。
+            </td>
+          </tr>
+
+          <!-- Aux 4.3 -->
+          <tr class="row-item" data-cat="aux">
+            <td class="font-bold text-amber-300">
+              4.3 牛熊證重貨區<br>
+              <span class="text-[11px] font-normal text-slate-400">打靶殺牛/屠熊位</span>
+            </td>
+            <td class="space-y-1">
+              <div><strong>今早重牛區：</strong>23,100–23,199 (662張, +300)</div>
+              <div><strong>下層重牛區：</strong><strong>22,700–22,799 (704張)</strong> (<a href="https://www.i-cable.com/category/%E8%B2%A1%E7%B6%93%E8%B3%87%E8%A8%8A/%E8%82%A1%E5%B8%82%E7%9B%B4%E6%92%AD%E5%AE%A4" target="_blank" class="underline hover:text-sky-300">有線新聞</a>)</div>
+              <div><strong>熊證重貨：</strong>24,000–24,099 (735張)</div>
+            </td>
+            <td><span class="px-2 py-0.5 rounded text-xs font-bold badge-bear">23,100 即殺</span></td>
+            <td class="text-slate-200 leading-relaxed">
+              夜期 23,129（低見 23,097）令 <strong>23,100–23,199 牛證（662張）</strong> 明早 09:30 開市即面臨全數收回；下一個大牛群集中於 <strong>22,700–22,799</strong>。
+            </td>
+          </tr>
+
+          <!-- Aux 4.4 -->
+          <tr class="row-item" data-cat="aux">
+            <td class="font-bold text-amber-300">
+              4.4 最近期高低位<br>
+              <span class="text-[11px] font-normal text-slate-400">波段座標</span>
+            </td>
+            <td class="space-y-1">
+              <div><strong>11/18 期指日市：</strong>開 23,484 / 高 23,540 / 低 23,202 / 收 23,226</div>
+              <div><strong>11/18 夜期 (23:44)：</strong>高 23,231 / 低 <strong>23,097</strong> / 現報 <strong>23,129</strong></div>
+              <div><strong>前低大底：</strong>22,943 (11/2)</div>
+            </td>
+            <td><span class="px-2 py-0.5 rounded text-xs font-bold badge-bear">續創新低</span></td>
+            <td class="text-slate-200 leading-relaxed">
+              夜期低水 166 點且跌破日市低位 23,202，日市低位 <strong>23,202–23,231</strong> 明日將轉為即市反彈首關阻力。
+            </td>
+          </tr>
+
+          <!-- Aux 4.5 -->
+          <tr class="row-item" data-cat="aux">
+            <td class="font-bold text-amber-300">
+              4.5 大戶嘅 P&amp;L<br>
+              <span class="text-[11px] font-normal text-slate-400">Max Pain 利潤區</span>
+            </td>
+            <td class="space-y-1">
+              <div><strong>Max Pain：</strong>24,000 (<a href="https://hsi-options-data.pages.dev/" target="_blank" class="underline hover:text-sky-300">雲端表</a>)</div>
+              <div><strong>Put 牆新重倉：</strong>23,000 (1,381張) / 22,800 (1,257張)</div>
+            </td>
+            <td><span class="px-2 py-0.5 rounded text-xs font-bold badge-bear">23,000 保衛戰</span></td>
+            <td class="text-slate-200 leading-relaxed">
+              做市商在 23,400 以下負 Gamma 對沖尚未完結，要到 <strong>22,800–23,000</strong>（合計 2,638 張 Put 牆）先有機會見到實質護盤阻力。
+            </td>
+          </tr>
+
+          <!-- Aux 4.6 -->
+          <tr class="row-item" data-cat="aux">
+            <td class="font-bold text-amber-300">
+              4.6 外圍、北水與宏觀<br>
+              <span class="text-[11px] font-normal text-slate-400">資金流與業績</span>
+            </td>
+            <td class="space-y-1">
+              <div><strong>騰訊(00700)Q3：</strong>AI資本開支 814 億、自由現金流轉負 691 億 (<a href="https://hao.cnyes.com/post/278710" target="_blank" class="underline hover:text-sky-300">鉅亨號</a>)</div>
+              <div><strong>美股(11/18早段)：</strong>道指跌逾 400 點 (-1%) / 標指 -0.48% (<a href="https://www.hk01.com/%E8%B2%A1%E7%B6%93%E5%BF%AB%E8%A8%8A/60412431/%E7%BE%8E%E8%82%A1-%E9%81%93%E6%8C%87%E6%97%A9%E6%AE%B5%E8%B7%8C%E9%80%BE400%E9%BB%9E-%E7%B4%8D%E6%8C%87%E9%9D%A0%E7%A9%A9" target="_blank" class="underline hover:text-sky-300">HK01</a>)</div>
+              <div><strong>北水(11/18)：</strong>淨買入 &gt;20 億港元 (<a href="https://www.nbd.com.cn/articles/2026-11-18/4651051.html" target="_blank" class="underline hover:text-sky-300">每日經濟新聞</a>)</div>
+            </td>
+            <td><span class="px-2 py-0.5 rounded text-xs font-bold badge-bear">騰訊+美股壓盤</span></td>
+            <td class="text-slate-200 leading-relaxed">
+              騰訊業績後市場憂慮高資本開支蠶食短期利潤，疊加美股道指早段續跌逾 400 點，拖累港股夜期大低水。
+            </td>
+          </tr>
+
+          <!-- Action Plan -->
+          <tr class="row-item bg-slate-800/60" data-cat="plan">
+            <td class="font-bold text-rose-300">
+              ⚡ 週四最新實戰劇本<br>
+              <span class="text-[11px] font-normal text-slate-400">+300止賺 / -100止蝕</span>
+            </td>
+            <td class="space-y-1">
+              <div><strong>反抽高空區：</strong>23,200–23,260 (止蝕 23,330)</div>
+              <div><strong>下探目標：</strong>22,900–23,000 (+300點止賺)</div>
+              <div><strong>嚴禁撈底線：</strong>未見 22,800–23,000 企穩前不開多</div>
+            </td>
+            <td><span class="px-2 py-0.5 rounded text-xs font-bold badge-bear">高空不撈底</span></td>
+            <td class="text-slate-100 leading-relaxed">
+              1. <strong>淨數 +4,872 張鐵證下絕不逆勢接飛刀：</strong>明早殺完 23,100 牛證後切勿急於買升。<br>
+              2. <strong>順勢高空劇本：</strong>若早盤殺牛後技術反抽 <strong>23,200–23,260</strong>（今日日市收市及低水回補區）受阻，順勢開空（-100 點止蝕放 23,330，目標 +300 點看 <strong>22,900–22,950</strong>）。<br>
+              3. <strong>觀察底線：</strong>只有當指數回踩 <strong>22,800–23,000</strong>（新 Put 重兵＋本週 1,000 點波幅達標區）並出現止跌陽燭，先再評估博反彈。
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <script>
+    function filterRows(cat) {
+      const rows = document.querySelectorAll('.row-item');
+      rows.forEach(r => {
+        if (cat === 'all' || r.dataset.cat === cat) {
+          r.style.display = '';
+        } else {
+          r.style.display = 'none';
+        }
+      });
+      const btns = {
+        all: document.getElementById('tabAll'),
+        core: document.getElementById('tabCore'),
+        aux: document.getElementById('tabAux'),
+        plan: document.getElementById('tabPlan')
+      };
+      Object.keys(btns).forEach(k => {
+        if (k === cat) {
+          btns[k].className = 'px-3 py-1.5 rounded-lg font-bold bg-sky-600 text-white';
+        } else {
+          btns[k].className = 'px-3 py-1.5 rounded-lg font-bold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700';
+        }
+      });
+    }
+  </script>
 </body>
-</html>"""
-
-    with open("index.html", "w", encoding="utf-8") as f:
-        f.write(html)
-    print("🎉 最終版已完成！index.html、latest_hsi_options.json、latest_hsi_options.csv 已全部更新！")
-
-
-if __name__ == "__main__":
-    raw_data = fetch_latest_hkex_data()
-    if raw_data:
-        generate_dashboard_and_api(raw_data)
+</html>
