@@ -1,15 +1,15 @@
 {
   "max_pain": 24000,
-  "total_call_oi": 17087,
-  "total_put_oi": 25177,
-  "put_call_ratio": 1.47,
+  "total_call_oi": 17531,
+  "total_put_oi": 25000,
+  "put_call_ratio": 1.43,
   "breakdown": {
     "spot": {
       "label": "即月 (NOV-26)",
       "gross": 117962,
       "gross_diff": -646,
-      "net": 8090,
-      "net_diff": 0
+      "net": 7469,
+      "net_diff": -621
     },
     "next": {
       "label": "下月 (DEC-26)",
@@ -29,36 +29,36 @@
       "label": "總數",
       "gross": 142286,
       "gross_diff": -317,
-      "net": 8090,
-      "net_diff": 0
+      "net": 7469,
+      "net_diff": -621
     }
   },
   "top_call_walls": [
     {
       "strike": 24000,
-      "call_oi": 1474
+      "call_oi": 1591
     },
     {
       "strike": 25800,
-      "call_oi": 1295
+      "call_oi": 1288
     },
     {
       "strike": 26000,
-      "call_oi": 1166
+      "call_oi": 1169
     }
   ],
   "top_put_walls": [
     {
       "strike": 23400,
-      "put_oi": 1251
+      "put_oi": 1182
     },
     {
       "strike": 23600,
-      "put_oi": 1149
+      "put_oi": 1142
     },
     {
       "strike": 22000,
-      "put_oi": 1084
+      "put_oi": 1048
     }
   ]
 }
